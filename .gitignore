@@ -1,0 +1,23 @@
+# Python cache/bytecode
+__pycache__/
+.pycache/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Local runtime artifacts
+*.log
+.DS_Store
+
+# Local environment files with credentials
+env/consumer.env
+
+# Local certificates
+certs/*.crt
+
+# Local Codex scaffold/config
+.codex/
