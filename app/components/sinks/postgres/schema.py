@@ -5,10 +5,7 @@ from __future__ import annotations
 import psycopg
 from psycopg import sql
 
-try:
-    from .config import PostgresSinkSettings
-except ImportError:  # pragma: no cover
-    from config import PostgresSinkSettings
+from app.components.sinks.postgres.config import PostgresSinkSettings
 
 
 class PostgresSchemaManager:

@@ -2,6 +2,27 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.8] - 2026-04-13
+
+### Изменено
+- Удалены fallback-импорты `try/except ImportError` из runtime-модулей `app/*`.
+- Проект переведен на единый пакетный стиль импортов: `from app...`.
+- Compose-команды запуска обновлены на пакетный режим:
+  - `python -m app.consumer`
+  - `python -m app.apply`
+- Переименован apply orchestration-модуль:
+  - `app/components/sinks/postgres/apply_simulator.py` -> `app/components/sinks/postgres/apply_orchestrator.py`
+- Класс оркестратора переименован:
+  - `PostgresApplySimulator` -> `PostgresApplyOrchestrator`
+- Синхронизирована документация:
+  - `README.md`
+  - `components.md`
+  - `app/components/sinks/postgres/README.md`
+
+### Проверено
+- `python3 -m py_compile` для всех Python-модулей `app/`.
+- `docker compose config` для обновленного `docker-compose.yaml`.
+
 ## [0.2.7] - 2026-04-13
 
 ### Добавлено

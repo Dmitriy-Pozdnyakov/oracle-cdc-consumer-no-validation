@@ -6,10 +6,7 @@ from typing import Any, Dict, Optional
 
 from confluent_kafka import Consumer, Producer
 
-try:
-    from ..config import Config
-except ImportError:  # pragma: no cover
-    from config import Config
+from app.config import Config
 
 
 class KafkaClientFactory:

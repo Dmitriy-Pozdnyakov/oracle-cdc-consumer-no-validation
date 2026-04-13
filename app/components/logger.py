@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import sys
 
-try:
-    from ..config import Config
-except ImportError:  # pragma: no cover
-    from config import Config
+from app.config import Config
 
 
 class AppLogger:

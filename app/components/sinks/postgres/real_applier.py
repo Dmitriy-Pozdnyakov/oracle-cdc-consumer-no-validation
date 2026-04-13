@@ -21,10 +21,7 @@ import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
-try:
-    from .config import PostgresSinkSettings
-except ImportError:  # pragma: no cover
-    from config import PostgresSinkSettings
+from app.components.sinks.postgres.config import PostgresSinkSettings
 
 
 class PostgresRealApplier:

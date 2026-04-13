@@ -11,21 +11,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-try:
-    from .audit_writer import ApplySimulationAuditWriter
-    from .config import PostgresSinkSettings
-    from .real_applier import PostgresRealApplier
-    from .repository import PostgresStageApplyRepository
-    from ...stats import ApplyBatchStats
-except ImportError:  # pragma: no cover
-    from audit_writer import ApplySimulationAuditWriter
-    from config import PostgresSinkSettings
-    from real_applier import PostgresRealApplier
-    from repository import PostgresStageApplyRepository
-    from stats import ApplyBatchStats
+from app.components.sinks.postgres.audit_writer import ApplySimulationAuditWriter
+from app.components.sinks.postgres.config import PostgresSinkSettings
+from app.components.sinks.postgres.real_applier import PostgresRealApplier
+from app.components.sinks.postgres.repository import PostgresStageApplyRepository
+from app.components.stats import ApplyBatchStats
 
 
-class PostgresApplySimulator:
+class PostgresApplyOrchestrator:
     """Выполняет one-shot apply из stage таблицы в режимах `simulate|real`.
 
     Здесь остается orchestration-логика:

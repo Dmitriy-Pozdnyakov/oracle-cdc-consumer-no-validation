@@ -4,16 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-try:
-    from .base import Sink
-    from .csv_sink import CsvSink
-    from .postgres.config import postgres_settings_from_app_config
-    from .postgres.sink import PostgresSink
-except ImportError:  # pragma: no cover
-    from base import Sink
-    from csv_sink import CsvSink
-    from postgres.config import postgres_settings_from_app_config
-    from postgres.sink import PostgresSink
+from app.components.sinks.base import Sink
+from app.components.sinks.csv_sink import CsvSink
+from app.components.sinks.postgres.config import postgres_settings_from_app_config
+from app.components.sinks.postgres.sink import PostgresSink
 
 
 def create_sink(cfg: Any, logger: Any) -> Sink:

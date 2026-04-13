@@ -6,25 +6,13 @@ from typing import Any, Dict
 
 from confluent_kafka import Consumer, KafkaError, Message
 
-try:
-    from ..config import Config
-except ImportError:  # pragma: no cover
-    from config import Config
-
-try:
-    from .cdc_message_parser import CdcMessageParser
-    from .dlq import DlqPublisher
-    from .kafka_clients import KafkaClientFactory
-    from .logger import AppLogger
-    from .sinks.factory import create_sink
-    from .stats import ConsumerBatchStats
-except ImportError:  # pragma: no cover
-    from cdc_message_parser import CdcMessageParser
-    from dlq import DlqPublisher
-    from kafka_clients import KafkaClientFactory
-    from logger import AppLogger
-    from sinks.factory import create_sink
-    from stats import ConsumerBatchStats
+from app.config import Config
+from app.components.cdc_message_parser import CdcMessageParser
+from app.components.dlq import DlqPublisher
+from app.components.kafka_clients import KafkaClientFactory
+from app.components.logger import AppLogger
+from app.components.sinks.factory import create_sink
+from app.components.stats import ConsumerBatchStats
 
 
 class OneShotConsumerRunner:

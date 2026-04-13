@@ -397,16 +397,10 @@ def validate_config(cfg: Config) -> None:
 
     if cfg.sink.sink_type == "postgres":
         # Валидация Postgres-полей вынесена в отдельный sink subcomponent.
-        try:
-            from .components.sinks.postgres.config import (
-                postgres_settings_from_app_config,
-                validate_postgres_settings,
-            )
-        except ImportError:  # pragma: no cover
-            from components.sinks.postgres.config import (
-                postgres_settings_from_app_config,
-                validate_postgres_settings,
-            )
+        from app.components.sinks.postgres.config import (
+            postgres_settings_from_app_config,
+            validate_postgres_settings,
+        )
         validate_postgres_settings(postgres_settings_from_app_config(cfg))
 
     if cfg.apply.mode not in {"simulate", "real"}:

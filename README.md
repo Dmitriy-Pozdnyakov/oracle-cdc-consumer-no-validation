@@ -31,7 +31,7 @@
 - `app/components/sinks/postgres/repository.py` — SQL-слой apply (`claim/mark/count`);
 - `app/components/sinks/postgres/audit_writer.py` — CSV-аудит действий apply;
 - `app/components/sinks/postgres/real_applier.py` — реальный `upsert/delete` в target-таблицы;
-- `app/components/sinks/postgres/apply_simulator.py` — orchestration apply (`simulate|real`);
+- `app/components/sinks/postgres/apply_orchestrator.py` — orchestration apply (`simulate|real`);
 - `env/consumer.env.example` — пример env;
 - `docker-compose.yaml` — запуск контейнера.
 

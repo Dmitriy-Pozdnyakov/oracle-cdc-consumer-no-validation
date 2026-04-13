@@ -12,7 +12,7 @@ Postgres-подкомпонент для двухшагового контура
 - `repository.py` — SQL-операции apply-контура (`claim`, `mark_applied`, `mark_error`, `count_new`).
 - `audit_writer.py` — CSV-аудит действий apply.
 - `real_applier.py` — реальный `upsert/delete` в target-таблицы Postgres.
-- `apply_simulator.py` — orchestration apply (`simulate|real`) без raw SQL.
+- `apply_orchestrator.py` — orchestration apply (`simulate|real`) без raw SQL.
 
 ## Инварианты
 - Идемпотентность ingest по ключу `(kafka_topic, kafka_partition, kafka_offset)`.

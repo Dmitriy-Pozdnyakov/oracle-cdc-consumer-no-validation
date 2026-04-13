@@ -4,19 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-try:
-    from ..config import Config
-except ImportError:  # pragma: no cover
-    from config import Config
-
-try:
-    from .logger import AppLogger
-    from .sinks.postgres.apply_simulator import PostgresApplySimulator
-    from .sinks.postgres.config import postgres_settings_from_app_config
-except ImportError:  # pragma: no cover
-    from logger import AppLogger
-    from sinks.postgres.apply_simulator import PostgresApplySimulator
-    from sinks.postgres.config import postgres_settings_from_app_config
+from app.config import Config
+from app.components.logger import AppLogger
+from app.components.sinks.postgres.apply_orchestrator import PostgresApplyOrchestrator
+from app.components.sinks.postgres.config import postgres_settings_from_app_config
 
 
 class OneShotApplyRunner:
@@ -24,7 +15,7 @@ class OneShotApplyRunner:
 
     Раннер не содержит SQL/IO деталей:
     - проверяет корректность runtime-режима,
-    - запускает orchestration-слой `PostgresApplySimulator`,
+    - запускает orchestration-слой `PostgresApplyOrchestrator`,
     - гарантирует корректное закрытие ресурсов.
     """
 
@@ -32,7 +23,7 @@ class OneShotApplyRunner:
         self.cfg = cfg
         self.logger = AppLogger(cfg, prefix="oracle-cdc-apply")
         self._settings = postgres_settings_from_app_config(cfg)
-        self._simulator = PostgresApplySimulator(
+        self._orchestrator = PostgresApplyOrchestrator(
             settings=self._settings,
             logger=self.logger,
             apply_mode=cfg.apply.mode,
@@ -57,12 +48,12 @@ class OneShotApplyRunner:
     def run_once(self) -> Dict[str, Any]:
         """Выполняет один apply-batch в режиме `simulate` или `real`.
 
-        Даже при ошибке гарантирует `close()` симулятора, чтобы освободить
+        Даже при ошибке гарантирует `close()` оркестратора, чтобы освободить
         соединения и завершить процесс в предсказуемом состоянии.
         """
         self._validate_runtime_mode()
 
         try:
-            return self._simulator.run_once()
+            return self._orchestrator.run_once()
         finally:
-            self._simulator.close()
+            self._orchestrator.close()

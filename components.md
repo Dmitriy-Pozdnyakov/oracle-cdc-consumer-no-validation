@@ -19,7 +19,7 @@
 `apply.py`  
 -> `entrypoints/common.py` (shared bootstrap)  
 -> `components/apply_runner.py`  
--> `components/sinks/postgres/apply_simulator.py`  
+-> `components/sinks/postgres/apply_orchestrator.py`  
 -> `components/sinks/postgres/repository.py` (claim/mark/count)  
 -> `components/sinks/postgres/audit_writer.py` (CSV-аудит apply)  
 -> `components/sinks/postgres/real_applier.py` (реальный upsert/delete, если `APPLY_MODE=real`)  
@@ -84,7 +84,7 @@
   - реальный `upsert/delete` в target-таблицы Postgres;
   - PK для `upsert/delete` определяется по `key_json`;
   - schema выбирается из `APPLY_TARGET_SCHEMA` или `source_schema`.
-- `sinks/postgres/apply_simulator.py`:
+- `sinks/postgres/apply_orchestrator.py`:
   - orchestration one-shot apply (`simulate|real`);
   - в `simulate`: действие рассчитывается без записи в target-таблицу;
   - в `real`: делегирует реальное применение в `real_applier.py`;
@@ -103,9 +103,9 @@
 ## Зависимости между компонентами
 
 - `consumer_runner` зависит от `parser`, `kafka_clients`, `dlq`, `logger`, `sinks/factory`.
-- `apply_runner` зависит от `logger` и `sinks/postgres/apply_simulator`.
-- `consumer_runner` и `apply_simulator` используют `components/stats.py`.
-- `apply_simulator` зависит от `sinks/postgres/repository.py`, `audit_writer.py`, `real_applier.py`.
+- `apply_runner` зависит от `logger` и `sinks/postgres/apply_orchestrator`.
+- `consumer_runner` и `apply_orchestrator` используют `components/stats.py`.
+- `apply_orchestrator` зависит от `sinks/postgres/repository.py`, `audit_writer.py`, `real_applier.py`.
 - Вся Postgres-логика находится внутри `components/sinks/postgres/*`.
 - `config.py` является источником конфигурации для всех компонентов
   и разнесен по доменным секциям: `kafka/sink/postgres/apply/dlq/logging`.

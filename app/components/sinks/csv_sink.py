@@ -10,10 +10,7 @@ from typing import Any, Dict
 
 from confluent_kafka import Message
 
-try:
-    from .base import Sink
-except ImportError:  # pragma: no cover
-    from base import Sink
+from app.components.sinks.base import Sink
 
 
 class CsvSink(Sink):

@@ -14,12 +14,8 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-try:
-    from .config import PostgresSinkSettings
-    from .schema import PostgresSchemaManager
-except ImportError:  # pragma: no cover
-    from config import PostgresSinkSettings
-    from schema import PostgresSchemaManager
+from app.components.sinks.postgres.config import PostgresSinkSettings
+from app.components.sinks.postgres.schema import PostgresSchemaManager
 
 
 class PostgresStageApplyRepository:

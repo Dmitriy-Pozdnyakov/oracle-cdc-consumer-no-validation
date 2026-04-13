@@ -8,14 +8,9 @@
 
 from __future__ import annotations
 
-try:
-    from .config import load_config_from_env, validate_config
-    from .components.consumer_runner import OneShotConsumerRunner
-    from .entrypoints.common import run_oneshot_entrypoint
-except ImportError:  # pragma: no cover
-    from config import load_config_from_env, validate_config
-    from components.consumer_runner import OneShotConsumerRunner
-    from entrypoints.common import run_oneshot_entrypoint
+from app.config import load_config_from_env, validate_config
+from app.components.consumer_runner import OneShotConsumerRunner
+from app.entrypoints.common import run_oneshot_entrypoint
 
 
 def main() -> int:

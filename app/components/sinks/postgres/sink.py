@@ -10,14 +10,9 @@ import psycopg
 from psycopg import sql
 from confluent_kafka import Message
 
-try:
-    from ..base import Sink
-    from .config import PostgresSinkSettings
-    from .schema import PostgresSchemaManager
-except ImportError:  # pragma: no cover
-    from base import Sink
-    from config import PostgresSinkSettings
-    from schema import PostgresSchemaManager
+from app.components.sinks.base import Sink
+from app.components.sinks.postgres.config import PostgresSinkSettings
+from app.components.sinks.postgres.schema import PostgresSchemaManager
 
 
 class PostgresSink(Sink):
@@ -130,4 +125,3 @@ class PostgresSink(Sink):
         if self._conn is not None:
             self._conn.close()
             self._conn = None
-

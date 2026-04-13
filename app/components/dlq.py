@@ -9,15 +9,8 @@ from typing import Any, Dict, Optional
 
 from confluent_kafka import Message, Producer
 
-try:
-    from ..config import Config
-except ImportError:  # pragma: no cover
-    from config import Config
-
-try:
-    from .logger import AppLogger
-except ImportError:  # pragma: no cover
-    from logger import AppLogger
+from app.config import Config
+from app.components.logger import AppLogger
 
 
 class DlqPublisher:
