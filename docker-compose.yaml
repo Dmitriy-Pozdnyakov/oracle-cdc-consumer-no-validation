@@ -8,3 +8,13 @@ services:
       - ./certs/ca.crt:/certs/ca.crt:ro
       - ./state:/state
     restart: "no"
+
+  oracle-cdc-apply-no-validation:
+    build: .
+    env_file:
+      - ./env/consumer.env
+    command: ["python", "app/apply.py"]
+    volumes:
+      - ./certs/ca.crt:/certs/ca.crt:ro
+      - ./state:/state
+    restart: "no"

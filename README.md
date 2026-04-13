@@ -8,17 +8,25 @@
 - только `oneshot` режим (повторный запуск делает оркестратор);
 - manual commit (`enable.auto.commit=false`);
 - поддержка `BAD_MESSAGE_POLICY`: `strict` (default), `skip`, `dlq`.
+- поддержка двухшагового контура `ingest -> stage -> apply(simulation)`.
 
 ## Структура
 
 - `app/consumer.py` — CLI entrypoint;
+- `app/apply.py` — CLI entrypoint apply-шага (simulation);
 - `app/config.py` — env-конфиг и валидация;
-- `app/utils/consumer_runner.py` — orchestration one-shot цикла;
-- `app/utils/kafka_clients.py` — фабрика Kafka Consumer/Producer;
-- `app/utils/cdc_message_parser.py` — parse + валидация CDC envelope;
-- `app/utils/dlq.py` — публикация в DLQ;
-- `app/utils/logger.py` — единый формат логов;
-- `app/utils/postgres_sink_stub.py` — заглушка записи в Postgres (через CSV);
+- `app/components/consumer_runner.py` — orchestration one-shot цикла;
+- `app/components/apply_runner.py` — orchestration one-shot apply цикла;
+- `app/components/kafka_clients.py` — фабрика Kafka Consumer/Producer;
+- `app/components/cdc_message_parser.py` — parse + валидация CDC envelope;
+- `app/components/dlq.py` — публикация в DLQ;
+- `app/components/logger.py` — единый формат логов;
+- `app/components/sinks/factory.py` — выбор sink по `SINK_TYPE`;
+- `app/components/sinks/csv_sink.py` — CSV sink (имитация записи в БД);
+- `app/components/sinks/postgres/config.py` — Postgres-конфиг и валидация;
+- `app/components/sinks/postgres/schema.py` — DDL-управление schema/table;
+- `app/components/sinks/postgres/sink.py` — ingest запись в stage таблицу Postgres;
+- `app/components/sinks/postgres/apply_simulator.py` — apply simulation (`upsert`/`hard_delete`);
 - `env/consumer.env.example` — пример env;
 - `docker-compose.yaml` — запуск контейнера.
 
@@ -43,21 +51,75 @@ cp ../apache-kafka-stack/scripts/tls/ca.crt ./certs/ca.crt
 docker compose run --rm oracle-cdc-consumer-no-validation
 ```
 
+4. Запустить oneshot apply simulation:
+
+```bash
+docker compose run --rm oracle-cdc-apply-no-validation
+```
+
 ## Как работает oneshot
 
 Consumer завершает работу, когда выполняется одно из условий:
 - обработано `MAX_MESSAGES` успешных сообщений;
 - подряд получено `MAX_EMPTY_POLLS` пустых `poll`.
 
-Если `POSTGRES_STUB_ENABLED=true`, то перед commit offset
-каждое успешно обработанное сообщение записывается в CSV-файл
-`POSTGRES_STUB_CSV_PATH` (по умолчанию `/state/postgres_sink_stub.csv`).
-Это имитирует запись в Postgres.
+Перед commit offset выполняется sink-шаг:
+- `SINK_TYPE=csv`: сообщение пишется в CSV (`CSV_SINK_PATH`, по умолчанию `/state/postgres_sink_stub.csv`);
+- `SINK_TYPE=postgres`: сообщение пишется в Postgres stage-таблицу (`POSTGRES_SCHEMA.POSTGRES_TABLE`).
+
+Коммит offset делается только после успешной записи в sink.
 
 Этого достаточно для периодического запуска через:
 - cron/systemd timer;
 - Kubernetes Job/CronJob;
 - любой внешний scheduler.
+
+## Stage -> Apply (Hard Delete)
+
+Рекомендуемый поток для продуктивного контура:
+1. `ingest` (consumer) читает Kafka CDC и пишет события в `stage` таблицу Postgres.
+2. `apply` (отдельный oneshot процесс) забирает записи со статусом `new`.
+3. Для `op=c/u` симулируется `upsert`, для `op=d` симулируется `hard_delete`.
+4. Результат симуляции фиксируется:
+   - в stage-статусах (`apply_status`, `apply_action`, `apply_error_text`);
+   - в CSV-аудите `APPLY_SIMULATION_CSV_PATH`.
+
+Важно:
+- для этого контура обязательно выставить `SINK_TYPE=postgres`;
+- и заполнить `POSTGRES_*` параметры подключения.
+
+Статусы apply:
+- `new` — запись ждёт применения;
+- `processing` — запись взята в текущий apply-batch;
+- `applied_simulated` — симуляция успешна;
+- `error` — симуляция завершилась ошибкой (увеличен `apply_retry_count`).
+
+## Sink Конфигурация
+
+Для `SINK_TYPE=csv`:
+- `CSV_SINK_PATH` — путь к CSV файлу.
+
+Для `SINK_TYPE=postgres` обязательны:
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+- `POSTGRES_DATABASE`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_SCHEMA`
+- `POSTGRES_TABLE`
+
+Опционально:
+- `POSTGRES_SSLMODE` (default `prefer`)
+- `POSTGRES_CONNECT_TIMEOUT_SEC` (default `10`)
+- `POSTGRES_APPLICATION_NAME`
+- `POSTGRES_AUTO_CREATE_TABLE` (`true|false`)
+
+## Apply Конфигурация
+
+- `APPLY_MODE` — пока только `simulate`;
+- `APPLY_BATCH_SIZE` — сколько stage-событий claim-ить за один SQL-батч;
+- `APPLY_MAX_ROWS` — общий лимит apply-событий за один oneshot запуск;
+- `APPLY_SIMULATION_CSV_PATH` — CSV-аудит симулированных действий.
 
 ## Bad Message Policy
 

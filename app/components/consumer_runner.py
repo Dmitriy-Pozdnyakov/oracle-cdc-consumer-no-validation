@@ -16,13 +16,13 @@ try:
     from .dlq import DlqPublisher
     from .kafka_clients import KafkaClientFactory
     from .logger import AppLogger
-    from .postgres_sink_stub import PostgresSinkStub
+    from .sinks.factory import create_sink
 except ImportError:  # pragma: no cover
     from cdc_message_parser import CdcMessageParser
     from dlq import DlqPublisher
     from kafka_clients import KafkaClientFactory
     from logger import AppLogger
-    from postgres_sink_stub import PostgresSinkStub
+    from sinks.factory import create_sink
 
 
 class OneShotConsumerRunner:
@@ -33,7 +33,7 @@ class OneShotConsumerRunner:
         self.logger = AppLogger(cfg)
         self.client_factory = KafkaClientFactory(cfg)
         self.parser = CdcMessageParser()
-        self.postgres_stub = PostgresSinkStub(cfg)
+        self.sink = create_sink(cfg, self.logger)
 
     def run_once(self) -> Dict[str, Any]:
         """Запускает один consume-batch и возвращает статистику выполнения."""
@@ -88,10 +88,10 @@ class OneShotConsumerRunner:
                         f"commit_scn={source.get('commit_scn')}"
                     )
 
-                    # Имитация бизнес-действия "запись в Postgres":
-                    # при включенной заглушке сохраняем сообщение в CSV.
-                    if self.cfg.postgres_stub_enabled:
-                        self.postgres_stub.write_processed_message(msg, _key_obj, value_obj)
+                    # Бизнес-действие sink:
+                    # - csv: имитация записи в Postgres через CSV;
+                    # - postgres: реальная запись в Postgres.
+                    self.sink.write_processed_message(msg, _key_obj, value_obj)
 
                     # Коммит offset только после успешной обработки.
                     # Это поддерживает at-least-once модель доставки.
@@ -142,5 +142,6 @@ class OneShotConsumerRunner:
                 # Закрываем consumer всегда, чтобы корректно освободить group membership.
                 consumer.close()
             finally:
+                self.sink.close()
                 # Отдельно завершаем DLQ producer (если он был создан).
                 dlq_publisher.flush_on_shutdown()

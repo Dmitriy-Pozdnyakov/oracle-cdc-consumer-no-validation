@@ -43,8 +43,42 @@
 - [x] Проверка синтаксиса Python (`py_compile`).
 - [x] Проверка compose-конфига (`docker compose config`).
 
+### 8. Stage + Apply (hard delete first)
+- [x] Расширить Postgres sink до stage-модели со статусами apply.
+- [x] Добавить one-shot apply entrypoint (`app/apply.py`).
+- [x] Реализовать apply simulation:
+  - `op=c/u` -> `upsert` (simulation),
+  - `op=d` -> `hard_delete` (simulation).
+- [x] Добавить запись apply-аудита в CSV (`APPLY_SIMULATION_CSV_PATH`).
+- [x] Добавить compose-сервис `oracle-cdc-apply-no-validation`.
+- [x] Обновить env/README/components под новый контур.
+
+### 9. Локальная Документация По Папкам
+- [x] Добавить mini-`README.md` в рабочие директории проекта:
+  - `app/`
+  - `app/components/`
+  - `app/components/sinks/`
+  - `app/components/sinks/postgres/`
+  - `env/`
+  - `certs/`
+  - `state/`
+- [x] Зафиксировать краткие правила по назначению и границам изменений для каждой папки.
+
+### 10. Рефакторинг Читаемости (согласуем поэтапно)
+- [ ] Этап A (без изменения бизнес-логики):
+  - [ ] Упростить CLI-слой (`consumer.py`, `apply.py`) через общий bootstrap helper.
+  - [ ] Разбить длинные `run_once` на более мелкие методы.
+  - [ ] Вынести структуру статистики в отдельные dataclass-модели.
+- [ ] Этап B (декомпозиция компонентов):
+  - [ ] Разделить слой apply на orchestration + repository + audit writer.
+  - [ ] Разнести конфиг по доменным секциям (Kafka/Sink/Postgres/Apply/DLQ).
+- [ ] Этап C (контроль регрессий):
+  - [ ] Добавить базовые unit-тесты для parser/config/factory/apply action mapping.
+  - [ ] Добавить единый локальный check-скрипт для быстрой валидации.
+
 ## Ближайшие улучшения (по желанию)
 - [ ] Добавить метрики (processed/failed/lag) в Prometheus-friendly формате.
 - [ ] Добавить healthcheck-скрипт и structured JSON logs.
 - [ ] Добавить интеграционный тестовый сценарий с тестовым топиком и фикстурами сообщений.
 - [ ] Добавить отдельный DLQ consumer для разборов проблемных сообщений.
+- [ ] Заменить apply simulation на реальный apply в target main-table (SQL MERGE/UPSERT/DELETE).

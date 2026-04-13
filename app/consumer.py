@@ -2,7 +2,7 @@
 """CLI-точка входа для CDC consumer в режиме одноразового запуска.
 
 Архитектурная заметка:
-- вся рабочая логика вынесена в `app/utils/*`;
+- вся рабочая логика вынесена в `app/components/*`;
 - этот файл оставлен тонкой точкой входа.
 """
 
@@ -12,10 +12,10 @@ import sys
 
 try:
     from .config import load_config_from_env, validate_config
-    from .utils.consumer_runner import OneShotConsumerRunner
+    from .components.consumer_runner import OneShotConsumerRunner
 except ImportError:  # pragma: no cover
     from config import load_config_from_env, validate_config
-    from utils.consumer_runner import OneShotConsumerRunner
+    from components.consumer_runner import OneShotConsumerRunner
 
 
 def main() -> int:

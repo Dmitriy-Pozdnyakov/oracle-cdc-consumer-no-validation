@@ -1,4 +1,4 @@
-"""Заглушка Postgres sink: вместо БД пишет обработанные сообщения в CSV."""
+"""CSV sink: имитация записи в БД через файл."""
 
 from __future__ import annotations
 
@@ -11,19 +11,13 @@ from typing import Any, Dict
 from confluent_kafka import Message
 
 try:
-    from ..config import Config
+    from .base import Sink
 except ImportError:  # pragma: no cover
-    from config import Config
+    from base import Sink
 
 
-class PostgresSinkStub:
-    """Имитация записи в Postgres через append-запись строк в CSV файл.
-
-    Поведение:
-    - при первом обращении создает файл и пишет header;
-    - при последующих вызовах добавляет новую строку;
-    - используется как "точка успешной бизнес-обработки" перед commit offset.
-    """
+class CsvSink(Sink):
+    """Пишет обработанные события в CSV (append-only)."""
 
     FIELDNAMES = [
         "processed_at_utc",
@@ -40,9 +34,8 @@ class PostgresSinkStub:
         "value_json",
     ]
 
-    def __init__(self, cfg: Config) -> None:
-        self.cfg = cfg
-        self.path = Path(cfg.postgres_stub_csv_path)
+    def __init__(self, csv_path: str) -> None:
+        self.path = Path(csv_path)
 
     def _ensure_parent(self) -> None:
         """Гарантирует наличие каталога для CSV файла."""
@@ -69,7 +62,7 @@ class PostgresSinkStub:
         key_obj: Dict[str, Any],
         value_obj: Dict[str, Any],
     ) -> None:
-        """Пишет одну обработанную запись в CSV (имитация INSERT в Postgres)."""
+        """Пишет одну обработанную запись в CSV."""
         source = value_obj.get("source", {}) if isinstance(value_obj.get("source"), dict) else {}
         row = {
             "processed_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -90,4 +83,8 @@ class PostgresSinkStub:
         with self.path.open("a", encoding="utf-8", newline="") as fp:
             writer = csv.DictWriter(fp, fieldnames=self.FIELDNAMES)
             writer.writerow(row)
+
+    def close(self) -> None:
+        """CSV sink не держит соединений, поэтому close no-op."""
+        return
 
