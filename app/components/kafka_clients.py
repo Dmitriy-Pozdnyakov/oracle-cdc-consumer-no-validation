@@ -20,28 +20,30 @@ class KafkaClientFactory:
 
     def _security_config(self) -> Dict[str, Any]:
         """Собирает общий security-конфиг для всех Kafka клиентов."""
+        kafka = self.cfg.kafka
         conf: Dict[str, Any] = {
-            "security.protocol": self.cfg.kafka_security_protocol,
+            "security.protocol": kafka.security_protocol,
         }
         # SSL-параметры применяются в SSL/SASL_SSL режимах.
-        if self.cfg.kafka_security_protocol in {"SSL", "SASL_SSL"}:
-            if self.cfg.ssl_cafile:
-                conf["ssl.ca.location"] = self.cfg.ssl_cafile
-            conf["ssl.endpoint.identification.algorithm"] = "https" if self.cfg.ssl_check_hostname else "none"
+        if kafka.security_protocol in {"SSL", "SASL_SSL"}:
+            if kafka.ssl_cafile:
+                conf["ssl.ca.location"] = kafka.ssl_cafile
+            conf["ssl.endpoint.identification.algorithm"] = "https" if kafka.ssl_check_hostname else "none"
         # SASL-параметры применяются в SASL_* режимах.
-        if self.cfg.kafka_security_protocol in {"SASL_SSL", "SASL_PLAINTEXT"}:
-            conf["sasl.mechanism"] = self.cfg.kafka_sasl_mechanism
-            conf["sasl.username"] = self.cfg.kafka_sasl_username
-            conf["sasl.password"] = self.cfg.kafka_sasl_password
+        if kafka.security_protocol in {"SASL_SSL", "SASL_PLAINTEXT"}:
+            conf["sasl.mechanism"] = kafka.sasl_mechanism
+            conf["sasl.username"] = kafka.sasl_username
+            conf["sasl.password"] = kafka.sasl_password
         return conf
 
     def build_consumer(self) -> Consumer:
         """Создает основной consumer в режиме ручного commit offset."""
+        kafka = self.cfg.kafka
         conf: Dict[str, Any] = {
-            "bootstrap.servers": self.cfg.kafka_broker,
-            "group.id": self.cfg.kafka_group_id,
-            "client.id": self.cfg.kafka_client_id,
-            "auto.offset.reset": self.cfg.auto_offset_reset,
+            "bootstrap.servers": kafka.broker,
+            "group.id": kafka.group_id,
+            "client.id": kafka.client_id,
+            "auto.offset.reset": kafka.auto_offset_reset,
             # Ключевой флаг: offset коммитится только явным вызовом commit().
             "enable.auto.commit": False,
         }
@@ -50,12 +52,13 @@ class KafkaClientFactory:
 
     def build_dlq_producer(self) -> Optional[Producer]:
         """Создает producer для DLQ только при `BAD_MESSAGE_POLICY=dlq`."""
-        if self.cfg.bad_message_policy != "dlq":
+        if self.cfg.dlq.bad_message_policy != "dlq":
             return None
 
+        kafka = self.cfg.kafka
         conf: Dict[str, Any] = {
-            "bootstrap.servers": self.cfg.kafka_broker,
-            "client.id": f"{self.cfg.kafka_client_id}-dlq",
+            "bootstrap.servers": kafka.broker,
+            "client.id": f"{kafka.client_id}-dlq",
             "acks": "all",
             # Idempotence повышает надежность отправки в DLQ при ретраях.
             "enable.idempotence": True,

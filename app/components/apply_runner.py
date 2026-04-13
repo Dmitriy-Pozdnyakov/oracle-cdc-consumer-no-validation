@@ -29,16 +29,16 @@ class OneShotApplyRunner:
         self._simulator = PostgresApplySimulator(
             settings=self._settings,
             logger=self.logger,
-            simulation_csv_path=cfg.apply_simulation_csv_path,
-            batch_size=cfg.apply_batch_size,
-            max_rows=cfg.apply_max_rows,
+            simulation_csv_path=cfg.apply.simulation_csv_path,
+            batch_size=cfg.apply.batch_size,
+            max_rows=cfg.apply.max_rows,
         )
 
     def _validate_runtime_mode(self) -> None:
         """Проверяет совместимость runtime-режима перед запуском apply."""
-        if self.cfg.sink_type != "postgres":
+        if self.cfg.sink.sink_type != "postgres":
             raise RuntimeError("Apply runner requires SINK_TYPE=postgres (stage table is in Postgres)")
-        if self.cfg.apply_mode != "simulate":
+        if self.cfg.apply.mode != "simulate":
             raise RuntimeError("Only APPLY_MODE=simulate is supported now")
 
     def run_once(self) -> Dict[str, Any]:

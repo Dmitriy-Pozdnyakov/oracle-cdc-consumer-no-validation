@@ -2,6 +2,36 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.5] - 2026-04-13
+
+### Изменено
+- `app/config.py` декомпозирован на доменные секции:
+  - `KafkaConfig`
+  - `SinkConfig`
+  - `PostgresConfig`
+  - `ApplyConfig`
+  - `DlqConfig`
+  - `LoggingConfig`
+- Корневой `Config` теперь агрегирует секции (`cfg.kafka`, `cfg.sink`, `cfg.postgres`, `cfg.apply`, `cfg.dlq`, `cfg.logging`).
+- Добавлены alias-свойства старого формата (`cfg.kafka_broker`, `cfg.apply_mode` и т.д.) для обратной совместимости.
+- Ключевые runtime-компоненты переведены на секционный доступ:
+  - `app/components/kafka_clients.py`
+  - `app/components/consumer_runner.py`
+  - `app/components/apply_runner.py`
+  - `app/components/dlq.py`
+  - `app/components/logger.py`
+  - `app/components/sinks/factory.py`
+  - `app/components/sinks/postgres/config.py`
+
+### Документация
+- Обновлены:
+  - `README.md`
+  - `app/README.md`
+  - `PLAN.md`
+
+### Проверено
+- `python3 -m py_compile` для обновленных модулей конфигурации и runtime.
+
 ## [0.2.4] - 2026-04-13
 
 ### Добавлено

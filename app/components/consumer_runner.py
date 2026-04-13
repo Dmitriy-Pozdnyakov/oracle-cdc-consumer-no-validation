@@ -40,17 +40,17 @@ class OneShotConsumerRunner:
     def _init_stats(self) -> ConsumerBatchStats:
         """Инициализирует счетчики текущего one-shot consume-batch."""
         return ConsumerBatchStats(
-            max_messages=self.cfg.max_messages,
-            max_empty_polls=self.cfg.max_empty_polls,
+            max_messages=self.cfg.sink.max_messages,
+            max_empty_polls=self.cfg.sink.max_empty_polls,
         )
 
     def _log_batch_start(self) -> None:
         """Логирует старт one-shot consume-batch цикла."""
         self.logger.info(
             "start oneshot batch "
-            f"(topic_regex={self.cfg.topic_regex}, group_id={self.cfg.kafka_group_id}, "
-            f"max_messages={self.cfg.max_messages}, max_empty_polls={self.cfg.max_empty_polls}, "
-            f"bad_policy={self.cfg.bad_message_policy})"
+            f"(topic_regex={self.cfg.kafka.topic_regex}, group_id={self.cfg.kafka.group_id}, "
+            f"max_messages={self.cfg.sink.max_messages}, max_empty_polls={self.cfg.sink.max_empty_polls}, "
+            f"bad_policy={self.cfg.dlq.bad_message_policy})"
         )
 
     @staticmethod
@@ -111,7 +111,7 @@ class OneShotConsumerRunner:
         stats.bad_messages += 1
         error_text = self._build_bad_message_error_text(msg, exc)
 
-        if self.cfg.bad_message_policy == "skip":
+        if self.cfg.dlq.bad_message_policy == "skip":
             # skip: фиксируем warning, коммитим offset и идем дальше.
             self.logger.warning(f"{error_text} (policy=skip)")
             consumer.commit(message=msg, asynchronous=False)
@@ -119,7 +119,7 @@ class OneShotConsumerRunner:
             stats.skipped_bad_messages += 1
             return
 
-        if self.cfg.bad_message_policy == "dlq":
+        if self.cfg.dlq.bad_message_policy == "dlq":
             # dlq: сохраняем оригинал проблемного сообщения и продолжаем поток.
             dlq_publisher.publish(msg, str(exc))
             consumer.commit(message=msg, asynchronous=False)
@@ -170,11 +170,11 @@ class OneShotConsumerRunner:
 
         self._log_batch_start()
 
-        consumer.subscribe([self.cfg.topic_regex])
+        consumer.subscribe([self.cfg.kafka.topic_regex])
 
         try:
-            while stats.processed < self.cfg.max_messages and stats.empty_polls < self.cfg.max_empty_polls:
-                msg = consumer.poll(self.cfg.poll_timeout_sec)
+            while stats.processed < self.cfg.sink.max_messages and stats.empty_polls < self.cfg.sink.max_empty_polls:
+                msg = consumer.poll(self.cfg.sink.poll_timeout_sec)
                 if self._handle_poll_result(msg, stats):
                     continue
 

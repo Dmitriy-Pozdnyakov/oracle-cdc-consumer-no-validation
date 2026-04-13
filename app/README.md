@@ -6,7 +6,7 @@
 ## Ключевые файлы
 - `consumer.py` — one-shot ingest запуск (Kafka -> sink).
 - `apply.py` — one-shot apply simulation запуск (stage -> simulated apply).
-- `config.py` — загрузка и fail-fast валидация env-конфига.
+- `config.py` — загрузка и fail-fast валидация env-конфига (секции: `kafka/sink/postgres/apply/dlq/logging`).
 - `entrypoints/` — общие bootstrap-хелперы для CLI.
 - `components/` — прикладные компоненты runtime.
 

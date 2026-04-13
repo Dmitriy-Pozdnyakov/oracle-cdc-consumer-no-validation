@@ -34,6 +34,18 @@
 - `env/consumer.env.example` — пример env;
 - `docker-compose.yaml` — запуск контейнера.
 
+## Структура Config (в коде)
+
+Внутри `app/config.py` конфиг разнесен по доменным секциям:
+- `cfg.kafka` — Kafka connection + topic subscription;
+- `cfg.sink` — oneshot runtime лимиты и тип sink;
+- `cfg.postgres` — настройки stage Postgres;
+- `cfg.apply` — параметры apply simulation;
+- `cfg.dlq` — bad-message policy и DLQ;
+- `cfg.logging` — флаги логирования.
+
+Для плавной миграции сохранены alias-свойства старого формата (`cfg.kafka_broker`, `cfg.apply_mode` и т.д.).
+
 ## Быстрый старт
 
 1. Подготовить env:

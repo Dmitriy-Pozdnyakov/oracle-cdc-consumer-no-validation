@@ -1,14 +1,15 @@
 """Конфигурационный слой one-shot CDC consumer (режим topic-per-table).
 
 Что находится в этом модуле:
-1) Dataclass `Config` со всеми runtime-параметрами.
-2) Загрузка параметров из env (`load_config_from_env`).
-3) Fail-fast валидация обязательных и критичных значений (`validate_config`).
+1) Доменные dataclass-секции конфигурации (Kafka/Sink/Postgres/Apply/DLQ/Logging).
+2) Корневой `Config`, агрегирующий секции.
+3) Загрузка параметров из env (`load_config_from_env`).
+4) Fail-fast валидация обязательных и критичных значений (`validate_config`).
 
-Зачем вынесено отдельно:
-- централизовать все env-параметры в одном месте;
-- упростить сопровождение и поиск ошибок конфигурации;
-- держать бизнес-логику consumer-а отдельно от конфиг-логики.
+Почему так:
+- проще читать и поддерживать конфиг по доменам;
+- легче эволюционировать секции независимо;
+- сохраняется обратная совместимость через alias-свойства `cfg.<старое_имя>`.
 """
 
 from __future__ import annotations
@@ -19,69 +20,231 @@ from typing import List
 
 
 @dataclass
-class Config:
-    # =========================
-    # Kafka connection
-    # =========================
-    kafka_broker: str
-    kafka_group_id: str
-    kafka_client_id: str
-    kafka_security_protocol: str
+class KafkaConfig:
+    """Секция Kafka подключения и подписки."""
+
+    broker: str
+    group_id: str
+    client_id: str
+    security_protocol: str
     ssl_cafile: str
     ssl_check_hostname: bool
-    kafka_sasl_mechanism: str
-    kafka_sasl_username: str
-    kafka_sasl_password: str
-
-    # =========================
-    # Topic subscription
-    # =========================
+    sasl_mechanism: str
+    sasl_username: str
+    sasl_password: str
     topic_regex: str
     auto_offset_reset: str
 
-    # =========================
-    # One-shot runtime / sink
-    # =========================
+
+@dataclass
+class SinkConfig:
+    """Секция sink-поведения ingest-контура."""
+
+    sink_type: str
+    csv_sink_path: str
     poll_timeout_sec: float
     max_messages: int
     max_empty_polls: int
-    sink_type: str
-    csv_sink_path: str
 
-    # =========================
-    # Postgres sink
-    # =========================
-    postgres_host: str
-    postgres_port: int
-    postgres_database: str
-    postgres_user: str
-    postgres_password: str
-    postgres_schema: str
-    postgres_table: str
-    postgres_sslmode: str
-    postgres_connect_timeout_sec: int
-    postgres_application_name: str
-    postgres_auto_create_table: bool
 
-    # =========================
-    # Apply simulation (stage -> main)
-    # =========================
-    apply_mode: str
-    apply_batch_size: int
-    apply_max_rows: int
-    apply_simulation_csv_path: str
+@dataclass
+class PostgresConfig:
+    """Секция Postgres подключения и stage-таблицы."""
 
-    # =========================
-    # Bad message policy
-    # =========================
+    host: str
+    port: int
+    database: str
+    user: str
+    password: str
+    schema: str
+    table: str
+    sslmode: str
+    connect_timeout_sec: int
+    application_name: str
+    auto_create_table: bool
+
+
+@dataclass
+class ApplyConfig:
+    """Секция one-shot apply simulation."""
+
+    mode: str
+    batch_size: int
+    max_rows: int
+    simulation_csv_path: str
+
+
+@dataclass
+class DlqConfig:
+    """Секция bad-message policy и DLQ параметров."""
+
     bad_message_policy: str
-    dlq_topic: str
-    dlq_flush_timeout_sec: int
+    topic: str
+    flush_timeout_sec: int
+
+
+@dataclass
+class LoggingConfig:
+    """Секция параметров логирования."""
+
+    verbose: bool
+
+
+@dataclass
+class Config:
+    """Корневой агрегатор доменных секций конфигурации."""
+
+    kafka: KafkaConfig
+    sink: SinkConfig
+    postgres: PostgresConfig
+    apply: ApplyConfig
+    dlq: DlqConfig
+    logging: LoggingConfig
 
     # =========================
-    # Logging
+    # Backward-compat alias API
     # =========================
-    verbose: bool
+    # Эти свойства оставлены для постепенной миграции существующего кода.
+
+    @property
+    def kafka_broker(self) -> str:
+        return self.kafka.broker
+
+    @property
+    def kafka_group_id(self) -> str:
+        return self.kafka.group_id
+
+    @property
+    def kafka_client_id(self) -> str:
+        return self.kafka.client_id
+
+    @property
+    def kafka_security_protocol(self) -> str:
+        return self.kafka.security_protocol
+
+    @property
+    def ssl_cafile(self) -> str:
+        return self.kafka.ssl_cafile
+
+    @property
+    def ssl_check_hostname(self) -> bool:
+        return self.kafka.ssl_check_hostname
+
+    @property
+    def kafka_sasl_mechanism(self) -> str:
+        return self.kafka.sasl_mechanism
+
+    @property
+    def kafka_sasl_username(self) -> str:
+        return self.kafka.sasl_username
+
+    @property
+    def kafka_sasl_password(self) -> str:
+        return self.kafka.sasl_password
+
+    @property
+    def topic_regex(self) -> str:
+        return self.kafka.topic_regex
+
+    @property
+    def auto_offset_reset(self) -> str:
+        return self.kafka.auto_offset_reset
+
+    @property
+    def poll_timeout_sec(self) -> float:
+        return self.sink.poll_timeout_sec
+
+    @property
+    def max_messages(self) -> int:
+        return self.sink.max_messages
+
+    @property
+    def max_empty_polls(self) -> int:
+        return self.sink.max_empty_polls
+
+    @property
+    def sink_type(self) -> str:
+        return self.sink.sink_type
+
+    @property
+    def csv_sink_path(self) -> str:
+        return self.sink.csv_sink_path
+
+    @property
+    def postgres_host(self) -> str:
+        return self.postgres.host
+
+    @property
+    def postgres_port(self) -> int:
+        return self.postgres.port
+
+    @property
+    def postgres_database(self) -> str:
+        return self.postgres.database
+
+    @property
+    def postgres_user(self) -> str:
+        return self.postgres.user
+
+    @property
+    def postgres_password(self) -> str:
+        return self.postgres.password
+
+    @property
+    def postgres_schema(self) -> str:
+        return self.postgres.schema
+
+    @property
+    def postgres_table(self) -> str:
+        return self.postgres.table
+
+    @property
+    def postgres_sslmode(self) -> str:
+        return self.postgres.sslmode
+
+    @property
+    def postgres_connect_timeout_sec(self) -> int:
+        return self.postgres.connect_timeout_sec
+
+    @property
+    def postgres_application_name(self) -> str:
+        return self.postgres.application_name
+
+    @property
+    def postgres_auto_create_table(self) -> bool:
+        return self.postgres.auto_create_table
+
+    @property
+    def apply_mode(self) -> str:
+        return self.apply.mode
+
+    @property
+    def apply_batch_size(self) -> int:
+        return self.apply.batch_size
+
+    @property
+    def apply_max_rows(self) -> int:
+        return self.apply.max_rows
+
+    @property
+    def apply_simulation_csv_path(self) -> str:
+        return self.apply.simulation_csv_path
+
+    @property
+    def bad_message_policy(self) -> str:
+        return self.dlq.bad_message_policy
+
+    @property
+    def dlq_topic(self) -> str:
+        return self.dlq.topic
+
+    @property
+    def dlq_flush_timeout_sec(self) -> int:
+        return self.dlq.flush_timeout_sec
+
+    @property
+    def verbose(self) -> bool:
+        return self.logging.verbose
 
 
 def _str_to_bool(raw: str, default: bool) -> bool:
@@ -114,45 +277,69 @@ def load_config_from_env() -> Config:
         # Backward compatibility: читаем старое имя переменной.
         csv_sink_path = os.getenv("POSTGRES_STUB_CSV_PATH", "/state/postgres_sink_stub.csv").strip()
 
-    return Config(
-        kafka_broker=broker,
-        kafka_group_id=os.getenv("KAFKA_GROUP_ID", "oracle-cdc-consumer-no-validation").strip(),
-        kafka_client_id=os.getenv("KAFKA_CLIENT_ID", "oracle-cdc-consumer-no-validation").strip(),
-        kafka_security_protocol=os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").strip().upper(),
+    kafka = KafkaConfig(
+        broker=broker,
+        group_id=os.getenv("KAFKA_GROUP_ID", "oracle-cdc-consumer-no-validation").strip(),
+        client_id=os.getenv("KAFKA_CLIENT_ID", "oracle-cdc-consumer-no-validation").strip(),
+        security_protocol=os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").strip().upper(),
         ssl_cafile=os.getenv("SSL_CAFILE", "").strip(),
         ssl_check_hostname=_str_to_bool(os.getenv("SSL_CHECK_HOSTNAME", "true"), True),
-        kafka_sasl_mechanism=os.getenv("KAFKA_SASL_MECHANISM", "PLAIN").strip(),
-        kafka_sasl_username=os.getenv("KAFKA_SASL_USERNAME", "").strip(),
-        kafka_sasl_password=os.getenv("KAFKA_SASL_PASSWORD", "").strip(),
+        sasl_mechanism=os.getenv("KAFKA_SASL_MECHANISM", "PLAIN").strip(),
+        sasl_username=os.getenv("KAFKA_SASL_USERNAME", "").strip(),
+        sasl_password=os.getenv("KAFKA_SASL_PASSWORD", "").strip(),
         topic_regex=os.getenv("TOPIC_REGEX", r"^oracle\.cdc\..+\..+$").strip(),
         auto_offset_reset=os.getenv("AUTO_OFFSET_RESET", "earliest").strip().lower(),
+    )
+
+    sink = SinkConfig(
+        sink_type=os.getenv("SINK_TYPE", "csv").strip().lower(),
+        csv_sink_path=csv_sink_path,
         poll_timeout_sec=float(os.getenv("POLL_TIMEOUT_SEC", "1.0")),
         max_messages=int(os.getenv("MAX_MESSAGES", "500")),
         max_empty_polls=int(os.getenv("MAX_EMPTY_POLLS", "15")),
-        sink_type=os.getenv("SINK_TYPE", "csv").strip().lower(),
-        csv_sink_path=csv_sink_path,
-        postgres_host=os.getenv("POSTGRES_HOST", "").strip(),
-        postgres_port=int(os.getenv("POSTGRES_PORT", "5432")),
-        postgres_database=os.getenv("POSTGRES_DATABASE", "").strip(),
-        postgres_user=os.getenv("POSTGRES_USER", "").strip(),
-        postgres_password=os.getenv("POSTGRES_PASSWORD", "").strip(),
-        postgres_schema=os.getenv("POSTGRES_SCHEMA", "public").strip(),
-        postgres_table=os.getenv("POSTGRES_TABLE", "cdc_events").strip(),
-        postgres_sslmode=os.getenv("POSTGRES_SSLMODE", "prefer").strip(),
-        postgres_connect_timeout_sec=int(os.getenv("POSTGRES_CONNECT_TIMEOUT_SEC", "10")),
-        postgres_application_name=os.getenv(
+    )
+
+    postgres = PostgresConfig(
+        host=os.getenv("POSTGRES_HOST", "").strip(),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        database=os.getenv("POSTGRES_DATABASE", "").strip(),
+        user=os.getenv("POSTGRES_USER", "").strip(),
+        password=os.getenv("POSTGRES_PASSWORD", "").strip(),
+        schema=os.getenv("POSTGRES_SCHEMA", "public").strip(),
+        table=os.getenv("POSTGRES_TABLE", "cdc_events").strip(),
+        sslmode=os.getenv("POSTGRES_SSLMODE", "prefer").strip(),
+        connect_timeout_sec=int(os.getenv("POSTGRES_CONNECT_TIMEOUT_SEC", "10")),
+        application_name=os.getenv(
             "POSTGRES_APPLICATION_NAME",
             "oracle-cdc-consumer-no-validation",
         ).strip(),
-        postgres_auto_create_table=_str_to_bool(os.getenv("POSTGRES_AUTO_CREATE_TABLE", "true"), True),
-        apply_mode=os.getenv("APPLY_MODE", "simulate").strip().lower(),
-        apply_batch_size=int(os.getenv("APPLY_BATCH_SIZE", "200")),
-        apply_max_rows=int(os.getenv("APPLY_MAX_ROWS", "5000")),
-        apply_simulation_csv_path=os.getenv("APPLY_SIMULATION_CSV_PATH", "/state/apply_simulation.csv").strip(),
+        auto_create_table=_str_to_bool(os.getenv("POSTGRES_AUTO_CREATE_TABLE", "true"), True),
+    )
+
+    apply = ApplyConfig(
+        mode=os.getenv("APPLY_MODE", "simulate").strip().lower(),
+        batch_size=int(os.getenv("APPLY_BATCH_SIZE", "200")),
+        max_rows=int(os.getenv("APPLY_MAX_ROWS", "5000")),
+        simulation_csv_path=os.getenv("APPLY_SIMULATION_CSV_PATH", "/state/apply_simulation.csv").strip(),
+    )
+
+    dlq = DlqConfig(
         bad_message_policy=os.getenv("BAD_MESSAGE_POLICY", "strict").strip().lower(),
-        dlq_topic=os.getenv("DLQ_TOPIC", "").strip(),
-        dlq_flush_timeout_sec=int(os.getenv("DLQ_FLUSH_TIMEOUT_SEC", "10")),
+        topic=os.getenv("DLQ_TOPIC", "").strip(),
+        flush_timeout_sec=int(os.getenv("DLQ_FLUSH_TIMEOUT_SEC", "10")),
+    )
+
+    logging = LoggingConfig(
         verbose=_str_to_bool(os.getenv("VERBOSE", "true"), True),
+    )
+
+    return Config(
+        kafka=kafka,
+        sink=sink,
+        postgres=postgres,
+        apply=apply,
+        dlq=dlq,
+        logging=logging,
     )
 
 
@@ -163,39 +350,39 @@ def validate_config(cfg: Config) -> None:
     Это позволяет поймать ошибку конфигурации до старта чтения Kafka.
     """
     missing: List[str] = []
-    if not cfg.kafka_broker:
+    if not cfg.kafka.broker:
         missing.append("KAFKA_BROKER or BROKER")
-    if not cfg.kafka_group_id:
+    if not cfg.kafka.group_id:
         missing.append("KAFKA_GROUP_ID")
-    if not cfg.topic_regex:
+    if not cfg.kafka.topic_regex:
         missing.append("TOPIC_REGEX")
 
     if missing:
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
 
     # Мы используем regex subscription, поэтому ожидаем явный якорь начала.
-    if not cfg.topic_regex.startswith("^"):
+    if not cfg.kafka.topic_regex.startswith("^"):
         raise RuntimeError("TOPIC_REGEX must start with '^' (regex subscription)")
 
-    if cfg.auto_offset_reset not in {"earliest", "latest"}:
+    if cfg.kafka.auto_offset_reset not in {"earliest", "latest"}:
         raise RuntimeError("AUTO_OFFSET_RESET must be one of: earliest, latest")
 
-    if cfg.kafka_security_protocol not in {"PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"}:
+    if cfg.kafka.security_protocol not in {"PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"}:
         raise RuntimeError("KAFKA_SECURITY_PROTOCOL must be one of: PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL")
 
-    if cfg.poll_timeout_sec <= 0:
+    if cfg.sink.poll_timeout_sec <= 0:
         raise RuntimeError("POLL_TIMEOUT_SEC must be > 0")
-    if cfg.max_messages <= 0:
+    if cfg.sink.max_messages <= 0:
         raise RuntimeError("MAX_MESSAGES must be > 0")
-    if cfg.max_empty_polls <= 0:
+    if cfg.sink.max_empty_polls <= 0:
         raise RuntimeError("MAX_EMPTY_POLLS must be > 0")
-    if cfg.sink_type not in {"csv", "postgres"}:
+    if cfg.sink.sink_type not in {"csv", "postgres"}:
         raise RuntimeError("SINK_TYPE must be one of: csv, postgres")
 
-    if cfg.sink_type == "csv" and not cfg.csv_sink_path:
+    if cfg.sink.sink_type == "csv" and not cfg.sink.csv_sink_path:
         raise RuntimeError("CSV_SINK_PATH is required when SINK_TYPE=csv")
 
-    if cfg.sink_type == "postgres":
+    if cfg.sink.sink_type == "postgres":
         # Валидация Postgres-полей вынесена в отдельный sink subcomponent.
         try:
             from .components.sinks.postgres.config import (
@@ -209,20 +396,20 @@ def validate_config(cfg: Config) -> None:
             )
         validate_postgres_settings(postgres_settings_from_app_config(cfg))
 
-    if cfg.apply_mode not in {"simulate"}:
+    if cfg.apply.mode not in {"simulate"}:
         raise RuntimeError("APPLY_MODE must be: simulate")
-    if cfg.apply_batch_size <= 0:
+    if cfg.apply.batch_size <= 0:
         raise RuntimeError("APPLY_BATCH_SIZE must be > 0")
-    if cfg.apply_max_rows <= 0:
+    if cfg.apply.max_rows <= 0:
         raise RuntimeError("APPLY_MAX_ROWS must be > 0")
-    if cfg.apply_mode == "simulate" and not cfg.apply_simulation_csv_path:
+    if cfg.apply.mode == "simulate" and not cfg.apply.simulation_csv_path:
         raise RuntimeError("APPLY_SIMULATION_CSV_PATH is required when APPLY_MODE=simulate")
 
-    if cfg.bad_message_policy not in {"strict", "skip", "dlq"}:
+    if cfg.dlq.bad_message_policy not in {"strict", "skip", "dlq"}:
         raise RuntimeError("BAD_MESSAGE_POLICY must be one of: strict, skip, dlq")
 
-    if cfg.bad_message_policy == "dlq" and not cfg.dlq_topic:
+    if cfg.dlq.bad_message_policy == "dlq" and not cfg.dlq.topic:
         raise RuntimeError("DLQ_TOPIC is required when BAD_MESSAGE_POLICY=dlq")
 
-    if cfg.dlq_flush_timeout_sec <= 0:
+    if cfg.dlq.flush_timeout_sec <= 0:
         raise RuntimeError("DLQ_FLUSH_TIMEOUT_SEC must be > 0")

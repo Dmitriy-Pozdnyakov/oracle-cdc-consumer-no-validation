@@ -100,7 +100,8 @@
 - `consumer_runner` и `apply_simulator` используют `components/stats.py`.
 - `apply_simulator` зависит от `sinks/postgres/repository.py` и `sinks/postgres/audit_writer.py`.
 - Вся Postgres-логика находится внутри `components/sinks/postgres/*`.
-- `config.py` является источником конфигурации для всех компонентов.
+- `config.py` является источником конфигурации для всех компонентов
+  и разнесен по доменным секциям: `kafka/sink/postgres/apply/dlq/logging`.
 
 ## Правила расширения
 

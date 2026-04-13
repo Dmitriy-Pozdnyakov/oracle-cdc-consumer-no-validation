@@ -25,7 +25,7 @@ class AppLogger:
 
     def info(self, message: str) -> None:
         """Печатает информационное сообщение только при `VERBOSE=true`."""
-        if self.cfg.verbose:
+        if self.cfg.logging.verbose:
             print(f"[{self.prefix}] {message}")
 
     def warning(self, message: str) -> None:

@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover
 
 def create_sink(cfg: Any, logger: Any) -> Sink:
     """Создает sink в зависимости от `SINK_TYPE`."""
-    if cfg.sink_type == "postgres":
+    if cfg.sink.sink_type == "postgres":
         pg_settings = postgres_settings_from_app_config(cfg)
         logger.info(
             "sink configured: postgres "
@@ -27,6 +27,5 @@ def create_sink(cfg: Any, logger: Any) -> Sink:
         )
         return PostgresSink(pg_settings)
 
-    logger.info(f"sink configured: csv (path={cfg.csv_sink_path})")
-    return CsvSink(cfg.csv_sink_path)
-
+    logger.info(f"sink configured: csv (path={cfg.sink.csv_sink_path})")
+    return CsvSink(cfg.sink.csv_sink_path)

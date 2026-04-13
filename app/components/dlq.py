@@ -55,22 +55,22 @@ class DlqPublisher:
 
         payload = self._build_payload(msg, error_text)
         payload_bytes = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        self.producer.produce(self.cfg.dlq_topic, key=msg.key(), value=payload_bytes)
-        remaining = self.producer.flush(self.cfg.dlq_flush_timeout_sec)
+        self.producer.produce(self.cfg.dlq.topic, key=msg.key(), value=payload_bytes)
+        remaining = self.producer.flush(self.cfg.dlq.flush_timeout_sec)
         if remaining > 0:
             # Если flush не опустошил очередь, считаем отправку ненадежной и падаем.
             raise RuntimeError(
                 f"DLQ producer flush timeout: {remaining} messages left in queue "
-                f"after {self.cfg.dlq_flush_timeout_sec}s"
+                f"after {self.cfg.dlq.flush_timeout_sec}s"
             )
 
         self.logger.warning(
             "sent bad message to DLQ "
-            f"topic={self.cfg.dlq_topic} source_topic={msg.topic()} "
+            f"topic={self.cfg.dlq.topic} source_topic={msg.topic()} "
             f"partition={msg.partition()} offset={msg.offset()}"
         )
 
     def flush_on_shutdown(self) -> None:
         """Делает best-effort flush DLQ producer во время shutdown."""
         if self.producer is not None:
-            self.producer.flush(self.cfg.dlq_flush_timeout_sec)
+            self.producer.flush(self.cfg.dlq.flush_timeout_sec)

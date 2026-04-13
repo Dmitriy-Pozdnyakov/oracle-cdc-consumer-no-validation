@@ -24,7 +24,28 @@ class PostgresSinkSettings:
 
 
 def postgres_settings_from_app_config(cfg: Any) -> PostgresSinkSettings:
-    """Строит `PostgresSinkSettings` из общего `Config` приложения."""
+    """Строит `PostgresSinkSettings` из общего `Config` приложения.
+
+    Поддерживает оба формата:
+    - новый секционный (`cfg.postgres.*`);
+    - legacy-поля (`cfg.postgres_*`) для обратной совместимости.
+    """
+    if hasattr(cfg, "postgres"):
+        pg = cfg.postgres
+        return PostgresSinkSettings(
+            host=pg.host,
+            port=pg.port,
+            database=pg.database,
+            user=pg.user,
+            password=pg.password,
+            schema=pg.schema,
+            table=pg.table,
+            sslmode=pg.sslmode,
+            connect_timeout_sec=pg.connect_timeout_sec,
+            application_name=pg.application_name,
+            auto_create_table=pg.auto_create_table,
+        )
+
     return PostgresSinkSettings(
         host=cfg.postgres_host,
         port=cfg.postgres_port,
@@ -65,4 +86,3 @@ def validate_postgres_settings(settings: PostgresSinkSettings) -> None:
         raise RuntimeError("POSTGRES_PORT must be > 0")
     if settings.connect_timeout_sec <= 0:
         raise RuntimeError("POSTGRES_CONNECT_TIMEOUT_SEC must be > 0")
-
