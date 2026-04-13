@@ -11,4 +11,4 @@ policies:
   bad_message_policy_default: strict
 documentation:
   function_docstring_language: ru
-  readme_update_policy: always_when_behavior_changes
+  readme_update_policy: batched_except_external_or_release_critical

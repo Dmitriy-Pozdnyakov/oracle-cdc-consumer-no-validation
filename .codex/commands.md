@@ -16,7 +16,13 @@
 ## Documentation Policy
 
 - Update `README`/`CHANGELOG` in batch at the end of a task series, not on every small change.
-- Do immediate docs update only for release-critical or externally visible behavior/config changes.
+- Immediate update is required for release-critical or externally visible behavior/config changes.
+
+## Small Scope Policy
+
+- Small scope: up to 2 files changed and no externally visible behavior/config changes.
+- Flow for small scope: implement -> targeted check (or explicit reasoning check if tests are absent) -> report.
+- Run full verify only on explicit request, before release, or when risk is high.
 
 ## Common Commands
 
