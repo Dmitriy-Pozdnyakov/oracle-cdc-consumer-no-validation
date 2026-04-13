@@ -22,7 +22,8 @@
 -> `components/sinks/postgres/apply_simulator.py`  
 -> `components/sinks/postgres/repository.py` (claim/mark/count)  
 -> `components/sinks/postgres/audit_writer.py` (CSV-аудит apply)  
--> CSV-аудит симуляции (`APPLY_SIMULATION_CSV_PATH`)
+-> `components/sinks/postgres/real_applier.py` (реальный upsert/delete, если `APPLY_MODE=real`)  
+-> CSV-аудит действий apply (`APPLY_SIMULATION_CSV_PATH`)
 
 ## Компоненты
 
@@ -33,9 +34,10 @@
 - Формирует итоговую статистику батча.
 
 ## 1.1) `apply_runner.py`
-- Координатор one-shot apply simulation цикла.
+- Координатор one-shot apply цикла.
 - Работает только с `SINK_TYPE=postgres`.
-- Выполняет `claim(new) -> simulate(upsert/hard_delete) -> mark status`.
+- Поддерживает `APPLY_MODE=simulate|real`.
+- Выполняет `claim(new) -> apply(simulate|real) -> mark status`.
 
 ## 1.2) `stats.py`
 - Dataclass-модели статистики one-shot циклов.
@@ -77,11 +79,16 @@
   - SQL-слой apply-контура:
   - `claim_new_rows`, `mark_applied`, `mark_error`, `count_new_rows`.
 - `sinks/postgres/audit_writer.py`:
-  - запись CSV-аудита симулированных действий apply.
+  - запись CSV-аудита действий apply.
+- `sinks/postgres/real_applier.py`:
+  - реальный `upsert/delete` в target-таблицы Postgres;
+  - PK для `upsert/delete` определяется по `key_json`;
+  - schema выбирается из `APPLY_TARGET_SCHEMA` или `source_schema`.
 - `sinks/postgres/apply_simulator.py`:
-  - orchestration one-shot apply simulation;
-  - `op=c/u` -> `upsert`, `op=d` -> `hard_delete`;
-  - делегирует SQL в repository, CSV-аудит в audit writer.
+  - orchestration one-shot apply (`simulate|real`);
+  - в `simulate`: действие рассчитывается без записи в target-таблицу;
+  - в `real`: делегирует реальное применение в `real_applier.py`;
+  - делегирует SQL stage в repository, CSV-аудит в audit writer.
 
 ## 5) `dlq.py`
 - Публикует проблемные сообщения в `DLQ_TOPIC`.
@@ -98,7 +105,7 @@
 - `consumer_runner` зависит от `parser`, `kafka_clients`, `dlq`, `logger`, `sinks/factory`.
 - `apply_runner` зависит от `logger` и `sinks/postgres/apply_simulator`.
 - `consumer_runner` и `apply_simulator` используют `components/stats.py`.
-- `apply_simulator` зависит от `sinks/postgres/repository.py` и `sinks/postgres/audit_writer.py`.
+- `apply_simulator` зависит от `sinks/postgres/repository.py`, `audit_writer.py`, `real_applier.py`.
 - Вся Postgres-логика находится внутри `components/sinks/postgres/*`.
 - `config.py` является источником конфигурации для всех компонентов
   и разнесен по доменным секциям: `kafka/sink/postgres/apply/dlq/logging`.

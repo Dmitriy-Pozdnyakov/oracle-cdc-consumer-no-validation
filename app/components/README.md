@@ -5,7 +5,7 @@
 
 ## Ключевые файлы
 - `consumer_runner.py` — основной oneshot consume-batch цикл.
-- `apply_runner.py` — oneshot apply simulation цикл.
+- `apply_runner.py` — oneshot apply цикл (`simulate|real`).
 - `stats.py` — dataclass-статистика consume/apply запусков.
 - `cdc_message_parser.py` — decode + валидация CDC envelope.
 - `kafka_clients.py` — создание Kafka Consumer/Producer.

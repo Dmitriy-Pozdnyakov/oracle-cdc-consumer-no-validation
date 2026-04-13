@@ -27,7 +27,7 @@ class ConsumerBatchStats:
 
 @dataclass
 class ApplyBatchStats:
-    """Накопительные счетчики one-shot apply simulation цикла."""
+    """Накопительные счетчики one-shot apply цикла (`simulate|real`)."""
 
     processed: int = 0
     applied: int = 0
@@ -42,4 +42,3 @@ class ApplyBatchStats:
     def as_dict(self) -> Dict[str, int]:
         """Возвращает сериализуемое представление статистики."""
         return asdict(self)
-

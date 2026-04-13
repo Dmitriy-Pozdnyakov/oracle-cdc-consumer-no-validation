@@ -28,7 +28,13 @@ except ImportError:  # pragma: no cover
 
 
 class OneShotConsumerRunner:
-    """Оркестрирует полный поток: poll -> parse -> policy -> commit."""
+    """Оркестрирует полный one-shot поток: poll -> parse -> sink -> policy -> commit.
+
+    Ключевая цель раннера:
+    - прочитать ограниченный батч сообщений;
+    - корректно применить политику ошибок (`strict/skip/dlq`);
+    - коммитить offset только после успешной обработки.
+    """
 
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
@@ -38,14 +44,24 @@ class OneShotConsumerRunner:
         self.sink = create_sink(cfg, self.logger)
 
     def _init_stats(self) -> ConsumerBatchStats:
-        """Инициализирует счетчики текущего one-shot consume-batch."""
+        """Инициализирует счетчики текущего one-shot запуска.
+
+        Лимиты (`max_messages`, `max_empty_polls`) копируются в статистику,
+        чтобы итоговый отчет всегда содержал исходные runtime-параметры.
+        """
         return ConsumerBatchStats(
             max_messages=self.cfg.sink.max_messages,
             max_empty_polls=self.cfg.sink.max_empty_polls,
         )
 
     def _log_batch_start(self) -> None:
-        """Логирует старт one-shot consume-batch цикла."""
+        """Логирует старт батча с ключевыми параметрами выполнения.
+
+        Сообщение помогает быстро понять:
+        - по какой regex-подписке читаем;
+        - какие лимиты завершения;
+        - какая активна bad-message policy.
+        """
         self.logger.info(
             "start oneshot batch "
             f"(topic_regex={self.cfg.kafka.topic_regex}, group_id={self.cfg.kafka.group_id}, "
@@ -55,13 +71,18 @@ class OneShotConsumerRunner:
 
     @staticmethod
     def _is_kafka_system_message(msg: Message) -> bool:
-        """Определяет, является ли сообщение системным Kafka event/error."""
+        """Определяет, является ли объект `Message` системным событием Kafka.
+
+        Для таких событий payload обычно отсутствует, а логика обработки иная,
+        чем у обычных data-сообщений.
+        """
         return bool(msg.error())
 
     def _handle_poll_result(self, msg: Message | None, stats: ConsumerBatchStats) -> bool:
         """Обрабатывает результат poll.
 
-        Возвращает `True`, если основной цикл должен перейти к следующему poll.
+        Возвращает `True`, если основной цикл должен сразу перейти к следующему `poll`,
+        и `False`, если пришло нормальное data-сообщение для дальнейшей обработки.
         """
         if msg is None:
             # Пустой poll — штатный случай при отсутствии данных.
@@ -81,7 +102,11 @@ class OneShotConsumerRunner:
         return False
 
     def _log_processed_message(self, msg: Message, value_obj: Dict[str, Any]) -> None:
-        """Логирует метаданные успешно распарсенного CDC-сообщения."""
+        """Логирует метаданные успешно распарсенного CDC-сообщения.
+
+        Лог содержит минимум, нужный для трассировки:
+        topic/partition/offset, тип операции, таблица и commit_scn.
+        """
         source = value_obj.get("source", {})
         self.logger.info(
             "processed "
@@ -93,7 +118,10 @@ class OneShotConsumerRunner:
 
     @staticmethod
     def _build_bad_message_error_text(msg: Message, exc: Exception) -> str:
-        """Формирует человекочитаемый текст ошибки для bad-message сценариев."""
+        """Формирует стандартизированный текст ошибки для bad-message сценария.
+
+        Единый формат нужен, чтобы проще искать инциденты в логах и DLQ payload.
+        """
         return (
             f"bad message topic={msg.topic()} partition={msg.partition()} "
             f"offset={msg.offset()} error={exc}"
@@ -107,7 +135,13 @@ class OneShotConsumerRunner:
         dlq_publisher: DlqPublisher,
         stats: ConsumerBatchStats,
     ) -> None:
-        """Применяет политику BAD_MESSAGE_POLICY к проблемному сообщению."""
+        """Применяет `BAD_MESSAGE_POLICY` к проблемному сообщению.
+
+        Ветка поведения:
+        - `skip`: warning + commit;
+        - `dlq`: publish в DLQ + commit;
+        - `strict`: исключение без commit (fail-fast).
+        """
         stats.bad_messages += 1
         error_text = self._build_bad_message_error_text(msg, exc)
 
@@ -137,7 +171,14 @@ class OneShotConsumerRunner:
         dlq_publisher: DlqPublisher,
         stats: ConsumerBatchStats,
     ) -> None:
-        """Обрабатывает одно data-сообщение и применяет commit/policy правила."""
+        """Обрабатывает одно data-сообщение end-to-end.
+
+        Последовательность:
+        1) parse и validate сообщения;
+        2) запись в sink;
+        3) commit offset при успехе;
+        4) при ошибке — делегирование в policy handler.
+        """
         try:
             key_obj, value_obj = self.parser.parse_message(msg)
             self._log_processed_message(msg, value_obj)
@@ -162,7 +203,12 @@ class OneShotConsumerRunner:
             )
 
     def run_once(self) -> Dict[str, Any]:
-        """Запускает один consume-batch и возвращает статистику выполнения."""
+        """Запускает один bounded consume-batch и возвращает статистику.
+
+        Цикл завершается при достижении любого лимита:
+        - `MAX_MESSAGES` успешно обработанных сообщений;
+        - `MAX_EMPTY_POLLS` подряд пустых poll.
+        """
         consumer = self.client_factory.build_consumer()
         dlq_producer = self.client_factory.build_dlq_producer()
         dlq_publisher = DlqPublisher(self.cfg, dlq_producer, self.logger)

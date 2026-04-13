@@ -8,12 +8,12 @@
 - только `oneshot` режим (повторный запуск делает оркестратор);
 - manual commit (`enable.auto.commit=false`);
 - поддержка `BAD_MESSAGE_POLICY`: `strict` (default), `skip`, `dlq`.
-- поддержка двухшагового контура `ingest -> stage -> apply(simulation)`.
+- поддержка двухшагового контура `ingest -> stage -> apply(simulate|real)`.
 
 ## Структура
 
 - `app/consumer.py` — CLI entrypoint;
-- `app/apply.py` — CLI entrypoint apply-шага (simulation);
+- `app/apply.py` — CLI entrypoint apply-шага (`simulate|real`);
 - `app/config.py` — env-конфиг и валидация;
 - `app/entrypoints/common.py` — общий bootstrap helper для CLI;
 - `app/components/consumer_runner.py` — orchestration one-shot цикла;
@@ -29,8 +29,9 @@
 - `app/components/sinks/postgres/schema.py` — DDL-управление schema/table;
 - `app/components/sinks/postgres/sink.py` — ingest запись в stage таблицу Postgres;
 - `app/components/sinks/postgres/repository.py` — SQL-слой apply (`claim/mark/count`);
-- `app/components/sinks/postgres/audit_writer.py` — CSV-аудит apply simulation;
-- `app/components/sinks/postgres/apply_simulator.py` — orchestration apply simulation (`upsert`/`hard_delete`);
+- `app/components/sinks/postgres/audit_writer.py` — CSV-аудит действий apply;
+- `app/components/sinks/postgres/real_applier.py` — реальный `upsert/delete` в target-таблицы;
+- `app/components/sinks/postgres/apply_simulator.py` — orchestration apply (`simulate|real`);
 - `env/consumer.env.example` — пример env;
 - `docker-compose.yaml` — запуск контейнера.
 
@@ -40,7 +41,7 @@
 - `cfg.kafka` — Kafka connection + topic subscription;
 - `cfg.sink` — oneshot runtime лимиты и тип sink;
 - `cfg.postgres` — настройки stage Postgres;
-- `cfg.apply` — параметры apply simulation;
+- `cfg.apply` — параметры apply (`simulate|real`);
 - `cfg.dlq` — bad-message policy и DLQ;
 - `cfg.logging` — флаги логирования.
 
@@ -67,7 +68,7 @@ cp ../apache-kafka-stack/scripts/tls/ca.crt ./certs/ca.crt
 docker compose run --rm oracle-cdc-consumer-no-validation
 ```
 
-4. Запустить oneshot apply simulation:
+4. Запустить oneshot apply:
 
 ```bash
 docker compose run --rm oracle-cdc-apply-no-validation
@@ -100,8 +101,10 @@ Consumer завершает работу, когда выполняется од
 Рекомендуемый поток для продуктивного контура:
 1. `ingest` (consumer) читает Kafka CDC и пишет события в `stage` таблицу Postgres.
 2. `apply` (отдельный oneshot процесс) забирает записи со статусом `new`.
-3. Для `op=c/u` симулируется `upsert`, для `op=d` симулируется `hard_delete`.
-4. Результат симуляции фиксируется:
+3. Режим apply выбирается через `APPLY_MODE`:
+   - `simulate`: симулирует `upsert/hard_delete` без записи в main-таблицу;
+   - `real`: выполняет реальный `upsert/delete` в target-таблицы Postgres.
+4. Результат фиксируется:
    - в stage-статусах (`apply_status`, `apply_action`, `apply_error_text`);
    - в CSV-аудите `APPLY_SIMULATION_CSV_PATH`.
 
@@ -113,7 +116,8 @@ Consumer завершает работу, когда выполняется од
 - `new` — запись ждёт применения;
 - `processing` — запись взята в текущий apply-batch;
 - `applied_simulated` — симуляция успешна;
-- `error` — симуляция завершилась ошибкой (увеличен `apply_retry_count`).
+- `applied_real` — реальное применение в target-таблицу успешно;
+- `error` — применение завершилось ошибкой (увеличен `apply_retry_count`).
 
 ## Sink Конфигурация
 
@@ -137,10 +141,11 @@ Consumer завершает работу, когда выполняется од
 
 ## Apply Конфигурация
 
-- `APPLY_MODE` — пока только `simulate`;
+- `APPLY_MODE` — `simulate` или `real`;
 - `APPLY_BATCH_SIZE` — сколько stage-событий claim-ить за один SQL-батч;
 - `APPLY_MAX_ROWS` — общий лимит apply-событий за один oneshot запуск;
-- `APPLY_SIMULATION_CSV_PATH` — CSV-аудит симулированных действий.
+- `APPLY_SIMULATION_CSV_PATH` — CSV-аудит действий apply;
+- `APPLY_TARGET_SCHEMA` — override target schema для `real` режима (если пусто, используется `source_schema`).
 
 ## Bad Message Policy
 

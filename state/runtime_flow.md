@@ -4,7 +4,7 @@ _Обновлено вручную через процесс Codex: 2026-04-13._
 
 ## Контекст
 - `ingest`: `consumer.py` (`oneshot`, regex-подписка по `TOPIC_REGEX`)
-- `apply`: `apply.py` (`oneshot`, stage -> simulated apply)
+- `apply`: `apply.py` (`oneshot`, stage -> simulate|real apply)
 - `sink_type`: `csv | postgres`
 - `bad_message_policy`: `strict | skip | dlq`
 
@@ -52,7 +52,8 @@ flowchart LR
 
 Комментарий:
 - apply читает только stage-строки со статусом `new`;
-- для `op=d` выполняется симуляция hard delete;
+- `APPLY_MODE=simulate`: только симуляция действий;
+- `APPLY_MODE=real`: реальный upsert/delete в target-таблицы;
 - на ошибке строка маркируется как `error`, offset Kafka не участвует.
 
 ```mermaid
@@ -60,29 +61,37 @@ flowchart LR
   A0["Старт apply.py"] --> A1["Загрузка и валидация env"]
   A1 --> A2{"SINK_TYPE = postgres?"}
   A2 -->|нет| A3["Ошибка конфигурации и stop"]
-  A2 -->|да| A4["Claim батча: new -> processing"]
-  A4 --> A5{"Батч пуст?"}
-  A5 -->|да| A6["Завершение oneshot"]
-  A5 -->|нет| A7["Обработка строк батча"]
+  A2 -->|да| A4{"APPLY_MODE"}
+  A4 -->|simulate| A5["Claim батча: new -> processing"]
+  A4 -->|real| A5
+  A5 --> A6{"Батч пуст?"}
+  A6 -->|да| A7["Завершение oneshot"]
+  A6 -->|нет| A8["Обработка строк батча"]
 
-  A7 --> A8{"op"}
-  A8 -->|c/u| A9["Симуляция upsert"]
-  A8 -->|d| A10["Симуляция hard delete"]
-  A9 --> A11["Запись аудита в CSV"]
-  A10 --> A11
-  A11 --> A12["stage: applied_simulated"]
+  A8 --> A9{"op"}
+  A9 -->|c/u| A10{"режим apply"}
+  A9 -->|d| A11{"режим apply"}
+  A10 -->|simulate| A12["Симуляция upsert"]
+  A10 -->|real| A13["Реальный upsert в target-table"]
+  A11 -->|simulate| A14["Симуляция hard delete"]
+  A11 -->|real| A15["Реальный delete в target-table"]
+  A12 --> A16["Запись аудита в CSV"]
+  A13 --> A16
+  A14 --> A16
+  A15 --> A16
+  A16 --> A17["stage: applied_simulated | applied_real"]
 
-  A7 --> A13["Ошибка строки"]
-  A13 --> A14["stage: error + retry_count+1"]
+  A8 --> A18["Ошибка строки"]
+  A18 --> A19["stage: error + retry_count+1"]
 
-  A12 --> A15{"Достигнут APPLY_MAX_ROWS?"}
-  A14 --> A15
-  A15 -->|да| A6
-  A15 -->|нет| A4
+  A17 --> A20{"Достигнут APPLY_MAX_ROWS?"}
+  A19 --> A20
+  A20 -->|да| A7
+  A20 -->|нет| A5
 ```
 
 ## Короткая легенда
-- `new` / `processing` / `applied_simulated` / `error` — статусы строк в stage.
+- `new` / `processing` / `applied_simulated` / `applied_real` / `error` — статусы строк в stage.
 - `commit offset` есть только в ingest-контуре consumer.
 - apply-контур работает по данным из stage, а не по offset Kafka.
 

@@ -2,7 +2,7 @@
 
 Зона ответственности:
 - SQL-claim записей `new -> processing`;
-- фиксация статуса `applied_simulated` или `error`;
+- фиксация статуса `applied_simulated|applied_real|error`;
 - чтение остатка `new` записей.
 """
 
@@ -107,14 +107,14 @@ class PostgresStageApplyRepository:
             conn.rollback()
             raise
 
-    def mark_applied(self, row: Dict[str, Any], action: str) -> None:
-        """Фиксирует успешную симуляцию apply по одной stage-записи."""
+    def mark_applied(self, row: Dict[str, Any], action: str, status: str) -> None:
+        """Фиксирует успешное применение apply по одной stage-записи."""
         conn = self._connect()
         update_sql = sql.SQL(
             """
             UPDATE {}.{}
             SET
-                apply_status = 'applied_simulated',
+                apply_status = %s,
                 apply_action = %s,
                 apply_finished_at_utc = NOW(),
                 apply_error_text = NULL
@@ -133,6 +133,7 @@ class PostgresStageApplyRepository:
                 cur.execute(
                     update_sql,
                     (
+                        status,
                         action,
                         row["kafka_topic"],
                         row["kafka_partition"],

@@ -1,4 +1,4 @@
-"""CSV-аудит apply simulation для Postgres stage-контура."""
+"""CSV-аудит apply-действий для Postgres stage-контура."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 
 class ApplySimulationAuditWriter:
-    """Пишет результат apply simulation в CSV-файл аудита."""
+    """Пишет результат apply-действий в CSV-файл аудита."""
 
     FIELDNAMES = [
         "applied_at_utc",
@@ -46,7 +46,7 @@ class ApplySimulationAuditWriter:
             writer.writeheader()
 
     def append_action(self, row: Dict[str, Any], action: str) -> None:
-        """Добавляет одну запись в CSV-аудит apply simulation."""
+        """Добавляет одну запись в CSV-аудит apply."""
         self._ensure_header()
         csv_row = {
             "applied_at_utc": datetime.now(timezone.utc).isoformat(),

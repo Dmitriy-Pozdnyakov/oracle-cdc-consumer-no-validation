@@ -17,7 +17,12 @@ except ImportError:  # pragma: no cover
 
 
 class CsvSink(Sink):
-    """Пишет обработанные события в CSV (append-only)."""
+    """Пишет обработанные события в CSV в append-only режиме.
+
+    Компонент используется как безопасная локальная заглушка БД:
+    - не требует подключения к внешним сервисам;
+    - фиксирует все поля, нужные для последующего аудита и отладки.
+    """
 
     FIELDNAMES = [
         "processed_at_utc",
@@ -35,14 +40,19 @@ class CsvSink(Sink):
     ]
 
     def __init__(self, csv_path: str) -> None:
+        """Инициализирует sink путем к CSV-файлу результата."""
         self.path = Path(csv_path)
 
     def _ensure_parent(self) -> None:
-        """Гарантирует наличие каталога для CSV файла."""
+        """Гарантирует, что родительский каталог CSV-файла существует."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _ensure_header(self) -> None:
-        """Создает CSV и пишет header, если файла еще нет."""
+        """Создает CSV и пишет header, если файла еще нет.
+
+        Заголовок пишется строго один раз при first-run,
+        чтобы последующие записи могли безопасно append-иться.
+        """
         if self.path.exists():
             return
 
@@ -53,7 +63,10 @@ class CsvSink(Sink):
 
     @staticmethod
     def _json_dump(payload: Dict[str, Any]) -> str:
-        """Сериализует dict в компактный JSON для одной CSV-ячейки."""
+        """Сериализует `dict` в компактный JSON для одной CSV-ячейки.
+
+        Компактный формат уменьшает размер файла и упрощает diff/log анализ.
+        """
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
     def write_processed_message(
@@ -62,7 +75,13 @@ class CsvSink(Sink):
         key_obj: Dict[str, Any],
         value_obj: Dict[str, Any],
     ) -> None:
-        """Пишет одну обработанную запись в CSV."""
+        """Пишет одну обработанную CDC-запись в CSV.
+
+        Метод формирует плоскую строку аудита:
+        - Kafka-метаданные (topic/partition/offset);
+        - CDC-метаданные (op/schema/table/commit_scn);
+        - сериализованные `key/before/after/value`.
+        """
         source = value_obj.get("source", {}) if isinstance(value_obj.get("source"), dict) else {}
         row = {
             "processed_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -85,6 +104,9 @@ class CsvSink(Sink):
             writer.writerow(row)
 
     def close(self) -> None:
-        """CSV sink не держит соединений, поэтому close no-op."""
-        return
+        """Закрывает sink.
 
+        Для CSV-реализации метод является no-op, потому что файл
+        открывается и закрывается внутри каждого write-вызова.
+        """
+        return

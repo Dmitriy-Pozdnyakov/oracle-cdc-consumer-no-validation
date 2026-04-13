@@ -2,6 +2,48 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.7] - 2026-04-13
+
+### Добавлено
+- Добавлен реальный apply-исполнитель:
+  - `app/components/sinks/postgres/real_applier.py`
+- Добавлен env-параметр:
+  - `APPLY_TARGET_SCHEMA` (override target schema для `APPLY_MODE=real`)
+
+### Изменено
+- `APPLY_MODE` расширен до `simulate|real`.
+- `app/components/sinks/postgres/apply_simulator.py` теперь оркестрирует оба режима:
+  - `simulate`: симуляция действий;
+  - `real`: реальный `upsert/delete` в target-таблицы.
+- `app/components/sinks/postgres/repository.py` поддерживает stage-статус `applied_real`.
+- `app/components/apply_runner.py` поддерживает запуск apply в `simulate|real`.
+- Обновлены документы:
+  - `README.md`
+  - `components.md`
+  - `app/components/README.md`
+  - `app/components/sinks/postgres/README.md`
+  - `env/README.md`
+  - `env/consumer.env.example`
+  - `PLAN.md`
+  - `state/runtime_flow.md`
+
+### Проверено
+- `python3 -m py_compile` для обновленных модулей apply-контура.
+
+## [0.2.6] - 2026-04-13
+
+### Изменено
+- Углублены docstring-комментарии по функциям в runtime-ядре:
+  - `app/components/consumer_runner.py`
+  - `app/components/cdc_message_parser.py`
+  - `app/components/apply_runner.py`
+  - `app/components/sinks/base.py`
+  - `app/components/sinks/csv_sink.py`
+- Комментарии расширены по целям методов, инвариантам и порядку шагов обработки.
+
+### Проверено
+- `python3 -m py_compile` для обновленных модулей.
+
 ## [0.2.5] - 2026-04-13
 
 ### Изменено

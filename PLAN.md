@@ -49,6 +49,9 @@
 - [x] Реализовать apply simulation:
   - `op=c/u` -> `upsert` (simulation),
   - `op=d` -> `hard_delete` (simulation).
+- [x] Реализовать apply real mode:
+  - `op=c/u` -> реальный `upsert` в target-таблицу,
+  - `op=d` -> реальный `delete` в target-таблицу.
 - [x] Добавить запись apply-аудита в CSV (`APPLY_SIMULATION_CSV_PATH`).
 - [x] Добавить compose-сервис `oracle-cdc-apply-no-validation`.
 - [x] Обновить env/README/components под новый контур.
@@ -88,4 +91,4 @@
 - [ ] Добавить healthcheck-скрипт и structured JSON logs.
 - [ ] Добавить интеграционный тестовый сценарий с тестовым топиком и фикстурами сообщений.
 - [ ] Добавить отдельный DLQ consumer для разборов проблемных сообщений.
-- [ ] Заменить apply simulation на реальный apply в target main-table (SQL MERGE/UPSERT/DELETE).
+- [x] Заменить apply simulation на реальный apply в target main-table (SQL MERGE/UPSERT/DELETE).

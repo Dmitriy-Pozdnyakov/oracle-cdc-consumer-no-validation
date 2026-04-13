@@ -66,12 +66,20 @@ class PostgresConfig:
 
 @dataclass
 class ApplyConfig:
-    """Секция one-shot apply simulation."""
+    """Секция one-shot apply (simulate/real).
+
+    Поля:
+    - `mode`: режим применения (`simulate` или `real`);
+    - `batch_size`/`max_rows`: лимиты one-shot запуска;
+    - `simulation_csv_path`: CSV-аудит действий apply;
+    - `target_schema`: override схемы target-таблиц для `real` режима.
+    """
 
     mode: str
     batch_size: int
     max_rows: int
     simulation_csv_path: str
+    target_schema: str
 
 
 @dataclass
@@ -231,6 +239,10 @@ class Config:
         return self.apply.simulation_csv_path
 
     @property
+    def apply_target_schema(self) -> str:
+        return self.apply.target_schema
+
+    @property
     def bad_message_policy(self) -> str:
         return self.dlq.bad_message_policy
 
@@ -321,6 +333,7 @@ def load_config_from_env() -> Config:
         batch_size=int(os.getenv("APPLY_BATCH_SIZE", "200")),
         max_rows=int(os.getenv("APPLY_MAX_ROWS", "5000")),
         simulation_csv_path=os.getenv("APPLY_SIMULATION_CSV_PATH", "/state/apply_simulation.csv").strip(),
+        target_schema=os.getenv("APPLY_TARGET_SCHEMA", "").strip(),
     )
 
     dlq = DlqConfig(
@@ -396,14 +409,14 @@ def validate_config(cfg: Config) -> None:
             )
         validate_postgres_settings(postgres_settings_from_app_config(cfg))
 
-    if cfg.apply.mode not in {"simulate"}:
-        raise RuntimeError("APPLY_MODE must be: simulate")
+    if cfg.apply.mode not in {"simulate", "real"}:
+        raise RuntimeError("APPLY_MODE must be one of: simulate, real")
     if cfg.apply.batch_size <= 0:
         raise RuntimeError("APPLY_BATCH_SIZE must be > 0")
     if cfg.apply.max_rows <= 0:
         raise RuntimeError("APPLY_MAX_ROWS must be > 0")
-    if cfg.apply.mode == "simulate" and not cfg.apply.simulation_csv_path:
-        raise RuntimeError("APPLY_SIMULATION_CSV_PATH is required when APPLY_MODE=simulate")
+    if not cfg.apply.simulation_csv_path:
+        raise RuntimeError("APPLY_SIMULATION_CSV_PATH is required")
 
     if cfg.dlq.bad_message_policy not in {"strict", "skip", "dlq"}:
         raise RuntimeError("BAD_MESSAGE_POLICY must be one of: strict, skip, dlq")

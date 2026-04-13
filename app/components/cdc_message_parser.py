@@ -9,11 +9,24 @@ from confluent_kafka import Message
 
 
 class CdcMessageParser:
-    """Парсит байты Kafka сообщения и проверяет базовый контракт CDC."""
+    """Парсит Kafka payload и валидирует минимальный CDC-контракт.
+
+    Парсер намеренно "строгий":
+    - сначала проверяет формат (UTF-8 + JSON object),
+    - затем проверяет обязательные поля CDC envelope,
+    - при несоответствии сразу бросает исключение для fail-fast политики.
+    """
 
     @staticmethod
     def _decode_json_bytes(raw: Optional[bytes], field_name: str) -> Dict[str, Any]:
-        """Декодирует bytes -> UTF-8 -> JSON object."""
+        """Декодирует `bytes` в JSON-объект словаря.
+
+        Этапы:
+        1) проверка, что payload не `None`;
+        2) декодирование как UTF-8;
+        3) `json.loads`;
+        4) проверка, что результат — именно `dict`.
+        """
         if raw is None:
             raise ValueError(f"{field_name} is null")
         try:
@@ -32,7 +45,14 @@ class CdcMessageParser:
 
     @staticmethod
     def _validate_cdc_envelope(value_obj: Dict[str, Any]) -> None:
-        """Проверяет минимально необходимую структуру CDC envelope."""
+        """Проверяет обязательные поля CDC envelope.
+
+        Инварианты:
+        - `op` только из набора `c/u/d`;
+        - `source.schema`, `source.table` непустые строки;
+        - `source.commit_scn` целое число;
+        - `before/after` согласованы с типом операции.
+        """
         # op должен быть только из базового набора DML-операций.
         op = value_obj.get("op")
         if op not in {"c", "u", "d"}:
@@ -66,7 +86,13 @@ class CdcMessageParser:
             raise ValueError("UPDATE op requires value.before or value.after")
 
     def parse_message(self, msg: Message) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Парсит Kafka сообщение и возвращает `(key_obj, value_obj)`."""
+        """Парсит Kafka-сообщение и возвращает `(key_obj, value_obj)`.
+
+        Метод объединяет все этапы в одном месте:
+        - decode/parse `key`;
+        - decode/parse `value`;
+        - валидация CDC envelope для `value`.
+        """
         key_obj = self._decode_json_bytes(msg.key(), "key")
         value_obj = self._decode_json_bytes(msg.value(), "value")
         self._validate_cdc_envelope(value_obj)
