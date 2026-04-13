@@ -2,13 +2,14 @@
 
 ## Response Format
 
-- Default response format: short summary + diff + what was verified.
+- Default response format: `compact` (short summary + diff + what was verified).
 - Extended details are provided only on request.
 
 ## Scope Gate
 
 - At the start of each new scope, confirm switches: `tests`, `README`, `CHANGELOG`, `docstrings`, `response_mode`.
 - `response_mode`: `compact` (short + diff + verified) or `normal` (with extra details).
+- If `response_mode` is not explicitly set for the scope, use `compact`.
 - Keep these switches fixed until the scope is completed.
 - Reconfirm switches for every new scope.
 
