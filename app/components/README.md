@@ -6,6 +6,7 @@
 ## Ключевые файлы
 - `consumer_runner.py` — основной oneshot consume-batch цикл.
 - `apply_runner.py` — oneshot apply simulation цикл.
+- `stats.py` — dataclass-статистика consume/apply запусков.
 - `cdc_message_parser.py` — decode + валидация CDC envelope.
 - `kafka_clients.py` — создание Kafka Consumer/Producer.
 - `dlq.py` — публикация проблемных сообщений в DLQ.
@@ -15,4 +16,3 @@
 ## Границы изменений
 - Новые функции добавлять отдельными компонентами.
 - Не смешивать в одном модуле transport, бизнес-правила и sink SQL-логику.
-

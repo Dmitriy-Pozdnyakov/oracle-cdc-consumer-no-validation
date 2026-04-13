@@ -11,4 +11,3 @@
 - Сначала копировать шаблон: `cp consumer.env.example consumer.env`.
 - Для контура `stage -> apply` выставлять `SINK_TYPE=postgres` и заполнять `POSTGRES_*`.
 - Для локальной проверки без БД можно использовать `SINK_TYPE=csv`.
-

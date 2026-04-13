@@ -2,6 +2,97 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.3] - 2026-04-13
+
+### Изменено
+- Генерация runtime-схемы вынесена из кода приложения в процесс сопровождения через `.codex`.
+- Из приложения удалены runtime-настройки схемы:
+  - `RUNTIME_DIAGRAM_ENABLED`
+  - `RUNTIME_DIAGRAM_PATH`
+- `state/runtime_flow.md` оставлен как документируемый артефакт архитектуры.
+
+### Удалено
+- `app/components/runtime_diagram.py`.
+- Best-effort обновление runtime-схемы из `app/entrypoints/common.py`.
+- Runtime diagram блок из `env/consumer.env.example`.
+
+### Документация
+- Обновлены:
+  - `README.md`
+  - `components.md`
+  - `PLAN.md`
+  - `app/components/README.md`
+  - `app/entrypoints/README.md`
+  - `env/README.md`
+  - `state/README.md`
+  - `.codex/project.yaml`
+  - `.codex/defaults.yaml`
+  - `.codex/runbooks/coding-standards.md`
+  - `.codex/checklists/done.md`
+  - `.codex/templates/runtime_flow.md.tpl`
+- Улучшена читаемость runtime-схемы:
+  - отдельные схемы для `Ingest` и `Apply`;
+  - русские подписи и комментарии по commit/error-поведению.
+
+## [0.2.2] - 2026-04-13
+
+### Добавлено
+- Добавлен модуль автогенерации runtime-схемы:
+  - `app/components/runtime_diagram.py`
+- Добавлены env-настройки runtime-схемы:
+  - `RUNTIME_DIAGRAM_ENABLED`
+  - `RUNTIME_DIAGRAM_PATH`
+
+### Изменено
+- `app/entrypoints/common.py` обновлен:
+  - добавлено best-effort обновление runtime-схемы при запуске entrypoint.
+- `app/config.py` расширен настройками runtime-схемы и их валидацией.
+- `app/consumer.py` и `app/apply.py` передают режим (`consumer|apply`) в shared bootstrap.
+- `.gitignore` обновлен: `state/runtime_flow.md` отмечен как локальный runtime-артефакт.
+- Обновлены документация и карта компонентов:
+  - `README.md`
+  - `components.md`
+  - `PLAN.md`
+  - `env/consumer.env.example`
+  - `app/entrypoints/README.md`
+  - `app/components/README.md`
+  - `env/README.md`
+  - `state/README.md`
+
+### Проверено
+- `python3 -m py_compile` для обновленных модулей.
+- `docker compose config` для `docker-compose.yaml`.
+
+## [0.2.1] - 2026-04-13
+
+### Добавлено
+- Добавлен общий CLI bootstrap helper:
+  - `app/entrypoints/common.py`
+- Добавлены dataclass-модели статистики:
+  - `app/components/stats.py`
+- Добавлены mini-`README.md` по рабочим директориям:
+  - `app/README.md`
+  - `app/components/README.md`
+  - `app/components/sinks/README.md`
+  - `app/components/sinks/postgres/README.md`
+  - `app/entrypoints/README.md`
+  - `env/README.md`
+  - `certs/README.md`
+  - `state/README.md`
+
+### Изменено
+- `app/consumer.py` и `app/apply.py` упрощены: общий шаблон запуска вынесен в `entrypoints/common.py`.
+- `app/components/consumer_runner.py` декомпозирован на небольшие методы без изменения runtime-поведения.
+- `app/components/sinks/postgres/apply_simulator.py` декомпозирован на небольшие методы без изменения runtime-поведения.
+- Обновлены документация и карта компонентов:
+  - `README.md`
+  - `components.md`
+  - `PLAN.md`
+
+### Проверено
+- `python3 -m py_compile` для обновленных модулей.
+- `docker compose config` для `docker-compose.yaml`.
+
 ## [0.2.0] - 2026-04-10
 
 ### Добавлено

@@ -34,15 +34,22 @@ class OneShotApplyRunner:
             max_rows=cfg.apply_max_rows,
         )
 
-    def run_once(self) -> Dict[str, Any]:
-        """Выполняет один apply-batch в simulation-режиме."""
+    def _validate_runtime_mode(self) -> None:
+        """Проверяет совместимость runtime-режима перед запуском apply."""
         if self.cfg.sink_type != "postgres":
             raise RuntimeError("Apply runner requires SINK_TYPE=postgres (stage table is in Postgres)")
         if self.cfg.apply_mode != "simulate":
             raise RuntimeError("Only APPLY_MODE=simulate is supported now")
 
+    def _run_simulation_once(self) -> Dict[str, Any]:
+        """Запускает один apply-batch в simulation-режиме."""
+        return self._simulator.run_once()
+
+    def run_once(self) -> Dict[str, Any]:
+        """Выполняет один apply-batch в simulation-режиме."""
+        self._validate_runtime_mode()
+
         try:
-            return self._simulator.run_once()
+            return self._run_simulation_once()
         finally:
             self._simulator.close()
-

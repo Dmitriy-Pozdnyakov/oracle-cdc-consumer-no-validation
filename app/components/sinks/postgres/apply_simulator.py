@@ -24,9 +24,11 @@ from psycopg.rows import dict_row
 try:
     from .config import PostgresSinkSettings
     from .schema import PostgresSchemaManager
+    from ...stats import ApplyBatchStats
 except ImportError:  # pragma: no cover
     from config import PostgresSinkSettings
     from schema import PostgresSchemaManager
+    from stats import ApplyBatchStats
 
 
 class PostgresApplySimulator:
@@ -279,15 +281,15 @@ class PostgresApplySimulator:
             result = cur.fetchone()
         return int(result[0]) if result else 0
 
-    def run_once(self) -> Dict[str, Any]:
-        """Выполняет один apply-batch (oneshot) в simulation-режиме."""
-        processed = 0
-        applied = 0
-        errors = 0
-        upserted = 0
-        hard_deleted = 0
-        batches = 0
+    def _init_stats(self) -> ApplyBatchStats:
+        """Инициализирует счетчики текущего one-shot apply цикла."""
+        return ApplyBatchStats(
+            max_rows=self.max_rows,
+            batch_size=self.batch_size,
+        )
 
+    def _log_apply_start(self) -> None:
+        """Логирует старт one-shot apply simulation цикла."""
         self.logger.info(
             "start apply simulation "
             f"(table={self.settings.schema}.{self.settings.table}, "
@@ -295,52 +297,52 @@ class PostgresApplySimulator:
             f"simulation_csv={self.simulation_csv_path})"
         )
 
-        while processed < self.max_rows:
-            limit = min(self.batch_size, self.max_rows - processed)
+    def _process_claimed_row(self, row: Dict[str, Any], stats: ApplyBatchStats) -> None:
+        """Обрабатывает одну stage-запись из already-claimed батча."""
+        stats.processed += 1
+        try:
+            action = self._resolve_action(str(row.get("op")))
+            self._append_simulation_row(row, action)
+            self._mark_applied(row, action)
+            stats.applied += 1
+            if action == "hard_delete":
+                stats.hard_deleted += 1
+            else:
+                stats.upserted += 1
+        except Exception as exc:
+            stats.errors += 1
+            try:
+                self._mark_error(row, str(exc))
+            except Exception as mark_exc:
+                self.logger.error(
+                    "failed to mark apply error "
+                    f"topic={row.get('kafka_topic')} partition={row.get('kafka_partition')} "
+                    f"offset={row.get('kafka_offset')} error={mark_exc}"
+                )
+                raise
+            self.logger.warning(
+                "apply simulation error "
+                f"topic={row.get('kafka_topic')} partition={row.get('kafka_partition')} "
+                f"offset={row.get('kafka_offset')} error={exc}"
+            )
+
+    def run_once(self) -> Dict[str, Any]:
+        """Выполняет один apply-batch (oneshot) в simulation-режиме."""
+        stats = self._init_stats()
+        self._log_apply_start()
+
+        while stats.processed < self.max_rows:
+            limit = min(self.batch_size, self.max_rows - stats.processed)
             rows = self._claim_batch(limit)
             if not rows:
                 break
 
-            batches += 1
+            stats.batches += 1
             for row in rows:
-                processed += 1
-                try:
-                    action = self._resolve_action(str(row.get("op")))
-                    self._append_simulation_row(row, action)
-                    self._mark_applied(row, action)
-                    applied += 1
-                    if action == "hard_delete":
-                        hard_deleted += 1
-                    else:
-                        upserted += 1
-                except Exception as exc:
-                    errors += 1
-                    try:
-                        self._mark_error(row, str(exc))
-                    except Exception as mark_exc:
-                        self.logger.error(
-                            "failed to mark apply error "
-                            f"topic={row.get('kafka_topic')} partition={row.get('kafka_partition')} "
-                            f"offset={row.get('kafka_offset')} error={mark_exc}"
-                        )
-                        raise
-                    self.logger.warning(
-                        "apply simulation error "
-                        f"topic={row.get('kafka_topic')} partition={row.get('kafka_partition')} "
-                        f"offset={row.get('kafka_offset')} error={exc}"
-                    )
+                self._process_claimed_row(row, stats)
 
-        result = {
-            "processed": processed,
-            "applied": applied,
-            "upserted": upserted,
-            "hard_deleted": hard_deleted,
-            "errors": errors,
-            "batches": batches,
-            "remaining_new": self._count_new_rows(),
-            "max_rows": self.max_rows,
-            "batch_size": self.batch_size,
-        }
+        stats.remaining_new = self._count_new_rows()
+        result = stats.as_dict()
         self.logger.info(f"apply simulation finished: {result}")
         return result
 

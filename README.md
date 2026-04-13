@@ -15,8 +15,10 @@
 - `app/consumer.py` — CLI entrypoint;
 - `app/apply.py` — CLI entrypoint apply-шага (simulation);
 - `app/config.py` — env-конфиг и валидация;
+- `app/entrypoints/common.py` — общий bootstrap helper для CLI;
 - `app/components/consumer_runner.py` — orchestration one-shot цикла;
 - `app/components/apply_runner.py` — orchestration one-shot apply цикла;
+- `app/components/stats.py` — dataclass-модели статистики batch/run;
 - `app/components/kafka_clients.py` — фабрика Kafka Consumer/Producer;
 - `app/components/cdc_message_parser.py` — parse + валидация CDC envelope;
 - `app/components/dlq.py` — публикация в DLQ;
@@ -73,6 +75,11 @@ Consumer завершает работу, когда выполняется од
 - cron/systemd timer;
 - Kubernetes Job/CronJob;
 - любой внешний scheduler.
+
+## Runtime Схема
+
+- Файл схемы: `state/runtime_flow.md` (Markdown + Mermaid).
+- Обновление схемы выполняется в процессе разработки по правилам `.codex` (а не в runtime-коде сервиса).
 
 ## Stage -> Apply (Hard Delete)
 

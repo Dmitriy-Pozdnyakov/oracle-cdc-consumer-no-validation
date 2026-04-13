@@ -3,32 +3,25 @@
 
 from __future__ import annotations
 
-import sys
-
 try:
     from .config import load_config_from_env, validate_config
     from .components.apply_runner import OneShotApplyRunner
+    from .entrypoints.common import run_oneshot_entrypoint
 except ImportError:  # pragma: no cover
     from config import load_config_from_env, validate_config
     from components.apply_runner import OneShotApplyRunner
+    from entrypoints.common import run_oneshot_entrypoint
 
 
 def main() -> int:
     """Загружает конфиг, запускает apply oneshot и возвращает код завершения."""
-    cfg = load_config_from_env()
-    validate_config(cfg)
-
-    runner = OneShotApplyRunner(cfg)
-    try:
-        stats = runner.run_once()
-        if cfg.verbose:
-            print(f"[oracle-cdc-apply] done: {stats}")
-        return 0
-    except Exception as exc:
-        print(f"[oracle-cdc-apply] ERROR: {exc}", file=sys.stderr)
-        return 1
+    return run_oneshot_entrypoint(
+        load_config=load_config_from_env,
+        validate_config=validate_config,
+        build_runner=OneShotApplyRunner,
+        log_prefix="oracle-cdc-apply",
+    )
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -5,6 +5,7 @@
 ## Общая схема потока
 
 `consumer.py`  
+-> `entrypoints/common.py` (shared bootstrap)  
 -> `components/consumer_runner.py`  
 -> `components/kafka_clients.py` (создание клиентов Kafka)  
 -> `components/cdc_message_parser.py` (парсинг/валидация CDC payload)  
@@ -16,6 +17,7 @@
 Отдельный apply-контур:
 
 `apply.py`  
+-> `entrypoints/common.py` (shared bootstrap)  
 -> `components/apply_runner.py`  
 -> `components/sinks/postgres/apply_simulator.py`  
 -> `components/sinks/postgres/schema.py` (DDL/миграция stage)  
@@ -33,6 +35,13 @@
 - Координатор one-shot apply simulation цикла.
 - Работает только с `SINK_TYPE=postgres`.
 - Выполняет `claim(new) -> simulate(upsert/hard_delete) -> mark status`.
+
+## 1.2) `stats.py`
+- Dataclass-модели статистики one-shot циклов.
+- Централизует структуру результата:
+  - `ConsumerBatchStats`
+  - `ApplyBatchStats`
+- Упрощает поддержку и делает формат счетчиков единообразным.
 
 ## 2) `kafka_clients.py`
 - Фабрика Kafka-клиентов из `Config`.
@@ -82,6 +91,7 @@
 
 - `consumer_runner` зависит от `parser`, `kafka_clients`, `dlq`, `logger`, `sinks/factory`.
 - `apply_runner` зависит от `logger` и `sinks/postgres/apply_simulator`.
+- `consumer_runner` и `apply_simulator` используют `components/stats.py`.
 - Вся Postgres-логика находится внутри `components/sinks/postgres/*`.
 - `config.py` является источником конфигурации для всех компонентов.
 
