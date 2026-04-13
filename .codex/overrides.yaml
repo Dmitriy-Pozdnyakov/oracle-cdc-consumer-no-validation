@@ -1,13 +1,2 @@
 # Optional project-specific overrides.
 # Keep only values that should differ from defaults.yaml.
-documentation:
-  require_plan: false
-  require_changelog: false
-  require_readme_update: false
-  require_runtime_flow_update: false
-  function_docstrings:
-    required: false
-workflow:
-  test_before_finish: false
-style:
-  comments: concise
