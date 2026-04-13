@@ -2,6 +2,29 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.4] - 2026-04-13
+
+### Добавлено
+- Добавлен `repository`-слой apply-контура:
+  - `app/components/sinks/postgres/repository.py`
+- Добавлен отдельный writer CSV-аудита:
+  - `app/components/sinks/postgres/audit_writer.py`
+
+### Изменено
+- `app/components/sinks/postgres/apply_simulator.py` упрощен до orchestration-слоя:
+  - SQL-операции делегированы в `repository.py`;
+  - CSV-аудит делегирован в `audit_writer.py`;
+  - бизнес-поведение apply не изменено.
+- `app/components/apply_runner.py` упрощен (прямой вызов `simulator.run_once()`).
+- Обновлены документы по структуре компонентов:
+  - `README.md`
+  - `components.md`
+  - `app/components/sinks/postgres/README.md`
+  - `PLAN.md`
+
+### Проверено
+- `python3 -m py_compile` для обновленных apply-модулей.
+
 ## [0.2.3] - 2026-04-13
 
 ### Изменено

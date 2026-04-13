@@ -70,7 +70,7 @@
   - [x] Разбить длинные `run_once` на более мелкие методы.
   - [x] Вынести структуру статистики в отдельные dataclass-модели.
 - [ ] Этап B (декомпозиция компонентов):
-  - [ ] Разделить слой apply на orchestration + repository + audit writer.
+  - [x] Разделить слой apply на orchestration + repository + audit writer.
   - [ ] Разнести конфиг по доменным секциям (Kafka/Sink/Postgres/Apply/DLQ).
 - [ ] Этап C (контроль регрессий):
   - [ ] Добавить базовые unit-тесты для parser/config/factory/apply action mapping.

@@ -28,7 +28,9 @@
 - `app/components/sinks/postgres/config.py` — Postgres-конфиг и валидация;
 - `app/components/sinks/postgres/schema.py` — DDL-управление schema/table;
 - `app/components/sinks/postgres/sink.py` — ingest запись в stage таблицу Postgres;
-- `app/components/sinks/postgres/apply_simulator.py` — apply simulation (`upsert`/`hard_delete`);
+- `app/components/sinks/postgres/repository.py` — SQL-слой apply (`claim/mark/count`);
+- `app/components/sinks/postgres/audit_writer.py` — CSV-аудит apply simulation;
+- `app/components/sinks/postgres/apply_simulator.py` — orchestration apply simulation (`upsert`/`hard_delete`);
 - `env/consumer.env.example` — пример env;
 - `docker-compose.yaml` — запуск контейнера.
 

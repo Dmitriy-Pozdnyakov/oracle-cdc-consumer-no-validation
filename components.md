@@ -20,7 +20,8 @@
 -> `entrypoints/common.py` (shared bootstrap)  
 -> `components/apply_runner.py`  
 -> `components/sinks/postgres/apply_simulator.py`  
--> `components/sinks/postgres/schema.py` (DDL/миграция stage)  
+-> `components/sinks/postgres/repository.py` (claim/mark/count)  
+-> `components/sinks/postgres/audit_writer.py` (CSV-аудит apply)  
 -> CSV-аудит симуляции (`APPLY_SIMULATION_CSV_PATH`)
 
 ## Компоненты
@@ -72,10 +73,15 @@
 - `sinks/postgres/sink.py`:
   - ingest запись в Postgres stage-таблицу;
   - idempotent вставка по ключу `(kafka_topic, kafka_partition, kafka_offset)`.
+- `sinks/postgres/repository.py`:
+  - SQL-слой apply-контура:
+  - `claim_new_rows`, `mark_applied`, `mark_error`, `count_new_rows`.
+- `sinks/postgres/audit_writer.py`:
+  - запись CSV-аудита симулированных действий apply.
 - `sinks/postgres/apply_simulator.py`:
-  - one-shot apply simulation;
+  - orchestration one-shot apply simulation;
   - `op=c/u` -> `upsert`, `op=d` -> `hard_delete`;
-  - фиксация статуса в stage + запись в CSV-аудит.
+  - делегирует SQL в repository, CSV-аудит в audit writer.
 
 ## 5) `dlq.py`
 - Публикует проблемные сообщения в `DLQ_TOPIC`.
@@ -92,6 +98,7 @@
 - `consumer_runner` зависит от `parser`, `kafka_clients`, `dlq`, `logger`, `sinks/factory`.
 - `apply_runner` зависит от `logger` и `sinks/postgres/apply_simulator`.
 - `consumer_runner` и `apply_simulator` используют `components/stats.py`.
+- `apply_simulator` зависит от `sinks/postgres/repository.py` и `sinks/postgres/audit_writer.py`.
 - Вся Postgres-логика находится внутри `components/sinks/postgres/*`.
 - `config.py` является источником конфигурации для всех компонентов.
 
