@@ -1,0 +1,14 @@
+language: ru
+documentation:
+  require_plan: true
+  require_changelog: true
+  require_readme_update: true
+  require_runtime_flow_update: true
+  function_docstrings:
+    required: true
+    language: ru
+workflow:
+  default_mode: implement_then_verify
+  test_before_finish: true
+style:
+  comments: detailed
