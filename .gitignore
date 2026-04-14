@@ -21,3 +21,8 @@ certs/*.crt
 
 # Local Codex scaffold/config
 .codex/
+scripts/
+
+AGENTS.md
+
+CHANGELOG.md
