@@ -9,7 +9,7 @@
 Почему так:
 - проще читать и поддерживать конфиг по доменам;
 - легче эволюционировать секции независимо;
-- сохраняется обратная совместимость через alias-свойства `cfg.<старое_имя>`.
+- единый доступ к параметрам через секции `cfg.<domain>.<field>`.
 """
 
 from __future__ import annotations
@@ -100,7 +100,12 @@ class LoggingConfig:
 
 @dataclass
 class Config:
-    """Корневой агрегатор доменных секций конфигурации."""
+    """Корневой агрегатор доменных секций конфигурации.
+
+    Внутри runtime-кода используем только секционный доступ:
+    `cfg.kafka.*`, `cfg.sink.*`, `cfg.postgres.*`, `cfg.apply.*`,
+    `cfg.dlq.*`, `cfg.logging.*`.
+    """
 
     kafka: KafkaConfig
     sink: SinkConfig
@@ -108,155 +113,6 @@ class Config:
     apply: ApplyConfig
     dlq: DlqConfig
     logging: LoggingConfig
-
-    # =========================
-    # Backward-compat alias API
-    # =========================
-    # Эти свойства оставлены для постепенной миграции существующего кода.
-
-    @property
-    def kafka_broker(self) -> str:
-        return self.kafka.broker
-
-    @property
-    def kafka_group_id(self) -> str:
-        return self.kafka.group_id
-
-    @property
-    def kafka_client_id(self) -> str:
-        return self.kafka.client_id
-
-    @property
-    def kafka_security_protocol(self) -> str:
-        return self.kafka.security_protocol
-
-    @property
-    def ssl_cafile(self) -> str:
-        return self.kafka.ssl_cafile
-
-    @property
-    def ssl_check_hostname(self) -> bool:
-        return self.kafka.ssl_check_hostname
-
-    @property
-    def kafka_sasl_mechanism(self) -> str:
-        return self.kafka.sasl_mechanism
-
-    @property
-    def kafka_sasl_username(self) -> str:
-        return self.kafka.sasl_username
-
-    @property
-    def kafka_sasl_password(self) -> str:
-        return self.kafka.sasl_password
-
-    @property
-    def topic_regex(self) -> str:
-        return self.kafka.topic_regex
-
-    @property
-    def auto_offset_reset(self) -> str:
-        return self.kafka.auto_offset_reset
-
-    @property
-    def poll_timeout_sec(self) -> float:
-        return self.sink.poll_timeout_sec
-
-    @property
-    def max_messages(self) -> int:
-        return self.sink.max_messages
-
-    @property
-    def max_empty_polls(self) -> int:
-        return self.sink.max_empty_polls
-
-    @property
-    def sink_type(self) -> str:
-        return self.sink.sink_type
-
-    @property
-    def csv_sink_path(self) -> str:
-        return self.sink.csv_sink_path
-
-    @property
-    def postgres_host(self) -> str:
-        return self.postgres.host
-
-    @property
-    def postgres_port(self) -> int:
-        return self.postgres.port
-
-    @property
-    def postgres_database(self) -> str:
-        return self.postgres.database
-
-    @property
-    def postgres_user(self) -> str:
-        return self.postgres.user
-
-    @property
-    def postgres_password(self) -> str:
-        return self.postgres.password
-
-    @property
-    def postgres_schema(self) -> str:
-        return self.postgres.schema
-
-    @property
-    def postgres_table(self) -> str:
-        return self.postgres.table
-
-    @property
-    def postgres_sslmode(self) -> str:
-        return self.postgres.sslmode
-
-    @property
-    def postgres_connect_timeout_sec(self) -> int:
-        return self.postgres.connect_timeout_sec
-
-    @property
-    def postgres_application_name(self) -> str:
-        return self.postgres.application_name
-
-    @property
-    def postgres_auto_create_table(self) -> bool:
-        return self.postgres.auto_create_table
-
-    @property
-    def apply_mode(self) -> str:
-        return self.apply.mode
-
-    @property
-    def apply_batch_size(self) -> int:
-        return self.apply.batch_size
-
-    @property
-    def apply_max_rows(self) -> int:
-        return self.apply.max_rows
-
-    @property
-    def apply_simulation_csv_path(self) -> str:
-        return self.apply.simulation_csv_path
-
-    @property
-    def apply_target_schema(self) -> str:
-        return self.apply.target_schema
-
-    @property
-    def bad_message_policy(self) -> str:
-        return self.dlq.bad_message_policy
-
-    @property
-    def dlq_topic(self) -> str:
-        return self.dlq.topic
-
-    @property
-    def dlq_flush_timeout_sec(self) -> int:
-        return self.dlq.flush_timeout_sec
-
-    @property
-    def verbose(self) -> bool:
-        return self.logging.verbose
 
 
 def _str_to_bool(raw: str, default: bool) -> bool:

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from app.config import Config
 
 
 @dataclass
@@ -23,41 +26,24 @@ class PostgresSinkSettings:
     auto_create_table: bool
 
 
-def postgres_settings_from_app_config(cfg: Any) -> PostgresSinkSettings:
+def postgres_settings_from_app_config(cfg: Config) -> PostgresSinkSettings:
     """Строит `PostgresSinkSettings` из общего `Config` приложения.
 
-    Поддерживает оба формата:
-    - новый секционный (`cfg.postgres.*`);
-    - legacy-поля (`cfg.postgres_*`) для обратной совместимости.
+    Ожидает секционный формат доступа через `cfg.postgres.*`.
     """
-    if hasattr(cfg, "postgres"):
-        pg = cfg.postgres
-        return PostgresSinkSettings(
-            host=pg.host,
-            port=pg.port,
-            database=pg.database,
-            user=pg.user,
-            password=pg.password,
-            schema=pg.schema,
-            table=pg.table,
-            sslmode=pg.sslmode,
-            connect_timeout_sec=pg.connect_timeout_sec,
-            application_name=pg.application_name,
-            auto_create_table=pg.auto_create_table,
-        )
-
+    pg = cfg.postgres
     return PostgresSinkSettings(
-        host=cfg.postgres_host,
-        port=cfg.postgres_port,
-        database=cfg.postgres_database,
-        user=cfg.postgres_user,
-        password=cfg.postgres_password,
-        schema=cfg.postgres_schema,
-        table=cfg.postgres_table,
-        sslmode=cfg.postgres_sslmode,
-        connect_timeout_sec=cfg.postgres_connect_timeout_sec,
-        application_name=cfg.postgres_application_name,
-        auto_create_table=cfg.postgres_auto_create_table,
+        host=pg.host,
+        port=pg.port,
+        database=pg.database,
+        user=pg.user,
+        password=pg.password,
+        schema=pg.schema,
+        table=pg.table,
+        sslmode=pg.sslmode,
+        connect_timeout_sec=pg.connect_timeout_sec,
+        application_name=pg.application_name,
+        auto_create_table=pg.auto_create_table,
     )
 
 

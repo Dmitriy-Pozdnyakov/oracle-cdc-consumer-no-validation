@@ -45,7 +45,7 @@
 - `cfg.dlq` — bad-message policy и DLQ;
 - `cfg.logging` — флаги логирования.
 
-Для плавной миграции сохранены alias-свойства старого формата (`cfg.kafka_broker`, `cfg.apply_mode` и т.д.).
+Доступ к конфигурации унифицирован: использовать только секционный формат (`cfg.kafka.*`, `cfg.sink.*`, `cfg.postgres.*`, `cfg.apply.*`, `cfg.dlq.*`, `cfg.logging.*`).
 
 ## Быстрый старт
 

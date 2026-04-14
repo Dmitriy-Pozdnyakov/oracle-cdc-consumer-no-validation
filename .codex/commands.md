@@ -17,6 +17,8 @@
 
 - Update `README`/`CHANGELOG` in batch at the end of a task series, not on every small change.
 - Immediate update is required for release-critical or externally visible behavior/config changes.
+- Track pending docs tasks in `state/docs_todo.md`.
+- After each batch docs update, remove closed items; keep only open items in the queue.
 
 ## Small Scope Policy
 

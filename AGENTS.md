@@ -18,6 +18,7 @@
 ## Documentation Policy
 - Update `README` and `CHANGELOG` in batch at the end of a task series.
 - Immediate update is required for release-critical or externally visible behavior/config changes.
+- Track pending docs updates in `state/docs_todo.md` and keep only open items.
 
 ## Language Policy
 - Operational docs/process rules: English.

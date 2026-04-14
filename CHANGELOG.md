@@ -2,6 +2,24 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.9] - 2026-04-14
+
+### Изменено
+- Завершена миграция на секционный доступ к конфигурации:
+  - из `app/config.py` удален legacy alias API (`cfg.<old_name>` свойства);
+  - `Config` оставлен как агрегатор доменных секций без backward-compat прокси.
+- Упрощен адаптер Postgres-настроек:
+  - `app/components/sinks/postgres/config.py` больше не поддерживает legacy-поля `cfg.postgres_*`;
+  - `postgres_settings_from_app_config` теперь использует только `cfg.postgres.*`;
+  - сигнатура ужесточена с `Any` до `Config` (через `TYPE_CHECKING`).
+- Обновлена документация по структуре `Config`:
+  - `README.md`.
+
+### Проверено
+- Поиск по коду на legacy-доступ `cfg.<section>_...` в `app/` (остатки не найдены вне удаленного fallback в `postgres/config.py`).
+- Попытка запуска тестов: `python3 -m pytest -q` (модуль `pytest` отсутствует в окружении).
+- `python3 -m compileall app`.
+
 ## [0.2.8] - 2026-04-13
 
 ### Изменено
