@@ -59,6 +59,9 @@
   - `op` (`c/u/d`);
   - `source` (`schema/table/commit_scn`);
   - корректность `before/after` по типу операции.
+- Для совместимости с legacy payload поддерживает `value.data`:
+  - `c/u`: `data -> after`;
+  - `d`: `data -> before`.
 
 ## 4) `sinks/*` subcomponent
 - `sinks/base.py`:

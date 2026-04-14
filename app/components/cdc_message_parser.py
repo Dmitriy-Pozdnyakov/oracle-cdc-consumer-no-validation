@@ -85,6 +85,27 @@ class CdcMessageParser:
         if op == "u" and before is None and after is None:
             raise ValueError("UPDATE op requires value.before or value.after")
 
+    @staticmethod
+    def _normalize_legacy_data_payload(value_obj: Dict[str, Any]) -> None:
+        """Поддерживает legacy-формат `value.data` через нормализацию к before/after.
+
+        Правила:
+        - `op in {c, u}`: `data` трактуется как `after`;
+        - `op == d`: `data` трактуется как `before`.
+
+        Нормализация применяется только если целевые поля еще не заданы,
+        чтобы не перетирать более точный payload при наличии before/after.
+        """
+        data_payload = value_obj.get("data")
+        if not isinstance(data_payload, dict):
+            return
+
+        op = value_obj.get("op")
+        if op in {"c", "u"} and value_obj.get("after") is None:
+            value_obj["after"] = data_payload
+        elif op == "d" and value_obj.get("before") is None:
+            value_obj["before"] = data_payload
+
     def parse_message(self, msg: Message) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Парсит Kafka-сообщение и возвращает `(key_obj, value_obj)`.
 
@@ -95,5 +116,6 @@ class CdcMessageParser:
         """
         key_obj = self._decode_json_bytes(msg.key(), "key")
         value_obj = self._decode_json_bytes(msg.value(), "value")
+        self._normalize_legacy_data_payload(value_obj)
         self._validate_cdc_envelope(value_obj)
         return key_obj, value_obj

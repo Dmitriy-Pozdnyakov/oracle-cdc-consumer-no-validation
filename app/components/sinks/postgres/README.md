@@ -18,3 +18,6 @@ Postgres-подкомпонент для двухшагового контура
 - Идемпотентность ingest по ключу `(kafka_topic, kafka_partition, kafka_offset)`.
 - Apply работает по статусам `apply_status` (`new`, `processing`, `applied_simulated`, `applied_real`, `error`).
 - Порядок применения опирается на `(topic, partition, offset)`.
+- Для `real` apply PK может извлекаться:
+  - из `key_json` (дефолт);
+  - из payload по `APPLY_PK_COLUMNS`, если key не несет бизнес-PK.

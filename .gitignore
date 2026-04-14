@@ -20,4 +20,4 @@ env/consumer.env
 certs/*.crt
 
 # Local Codex scaffold/config
-#.codex/
+.codex/

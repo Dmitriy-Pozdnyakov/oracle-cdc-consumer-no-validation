@@ -146,6 +146,8 @@ Consumer завершает работу, когда выполняется од
 - `APPLY_MAX_ROWS` — общий лимит apply-событий за один oneshot запуск;
 - `APPLY_SIMULATION_CSV_PATH` — CSV-аудит действий apply;
 - `APPLY_TARGET_SCHEMA` — override target schema для `real` режима (если пусто, используется `source_schema`).
+- `APPLY_PK_COLUMNS` — опциональный список PK-колонок через запятую для `real` режима.
+  Нужен для producer-форматов, где `key` не содержит бизнес-PK, а несет transport metadata.
 
 ## Bad Message Policy
 
@@ -170,3 +172,8 @@ Consumer завершает работу, когда выполняется од
   - нет `source` или `source.schema/source.table`;
   - `source.commit_scn` не число;
   - неконсистентные `before/after` для конкретного `op`.
+
+Примечание по совместимости:
+- поддерживается legacy-формат `value.data`:
+  - для `c/u` поле `data` трактуется как `after`;
+  - для `d` поле `data` трактуется как `before`.

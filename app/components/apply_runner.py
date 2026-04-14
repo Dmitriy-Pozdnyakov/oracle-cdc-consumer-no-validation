@@ -29,6 +29,7 @@ class OneShotApplyRunner:
             apply_mode=cfg.apply.mode,
             simulation_csv_path=cfg.apply.simulation_csv_path,
             target_schema_override=cfg.apply.target_schema,
+            pk_columns=cfg.apply.pk_columns,
             batch_size=cfg.apply.batch_size,
             max_rows=cfg.apply.max_rows,
         )

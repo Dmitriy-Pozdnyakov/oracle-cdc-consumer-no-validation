@@ -2,6 +2,32 @@
 
 Формат близок к `Keep a Changelog`.
 
+## [0.2.10] - 2026-04-14
+
+### Изменено
+- Расширен парсер CDC-сообщений под legacy-формат producer-а:
+  - `app/components/cdc_message_parser.py` теперь поддерживает `value.data`;
+  - нормализация выполняется по `op`:
+    - `c/u`: `data -> after`;
+    - `d`: `data -> before`.
+- Расширен real apply для producer-форматов, где key не содержит бизнес-PK:
+  - добавлен env `APPLY_PK_COLUMNS` (comma-separated);
+  - при заданном `APPLY_PK_COLUMNS` PK извлекается из payload (`after_json`/`before_json`), а не из `key_json`.
+- Протянут новый параметр apply-конфига через runtime-контур:
+  - `app/config.py`
+  - `app/components/apply_runner.py`
+  - `app/components/sinks/postgres/apply_orchestrator.py`
+  - `app/components/sinks/postgres/real_applier.py`
+- Обновлена документация:
+  - `README.md`
+  - `components.md`
+  - `env/consumer.env.example`
+
+### Проверено
+- Попытка запуска тестов: `python3 -m pytest -q` (модуль `pytest` отсутствует в окружении).
+- Смоук-проверка парсера и real-apply PK extraction на payload с `value.data` и transport-key (python-скрипт в Docker-образе `local/python311-with-reqs:1`).
+- `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall app`.
+
 ## [0.2.9] - 2026-04-14
 
 ### Изменено

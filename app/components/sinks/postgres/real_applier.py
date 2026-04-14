@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 from psycopg import sql
@@ -31,9 +31,11 @@ class PostgresRealApplier:
         self,
         settings: PostgresSinkSettings,
         target_schema_override: str,
+        pk_columns: List[str],
     ) -> None:
         self.settings = settings
         self.target_schema_override = target_schema_override.strip()
+        self.pk_columns = [col.strip() for col in pk_columns if col.strip()]
         self._conn: Optional[psycopg.Connection] = None
 
     def _connect(self) -> psycopg.Connection:
@@ -66,12 +68,54 @@ class PostgresRealApplier:
         return value
 
     @staticmethod
-    def _extract_pk_values(row: Dict[str, Any]) -> Dict[str, Any]:
-        """Извлекает PK-значения из `key_json`."""
+    def _extract_pk_values_from_key(row: Dict[str, Any]) -> Dict[str, Any]:
+        """Извлекает PK-значения из `key_json` (базовый режим)."""
         key_json = row.get("key_json")
         if not isinstance(key_json, dict) or not key_json:
             raise RuntimeError("real apply requires non-empty key_json for PK matching")
         return key_json
+
+    def _extract_pk_values_from_payload(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Извлекает PK-значения из payload по `APPLY_PK_COLUMNS`.
+
+        Источник полей:
+        - сначала `after_json` (для `c/u`);
+        - при отсутствии — `before_json` (для `d` и fallback случаев).
+        """
+        payload = row.get("after_json")
+        if not isinstance(payload, dict) or not payload:
+            payload = row.get("before_json")
+        if not isinstance(payload, dict) or not payload:
+            raise RuntimeError(
+                "real apply requires non-empty after_json/before_json "
+                "to extract PK by APPLY_PK_COLUMNS"
+            )
+
+        pk_values: Dict[str, Any] = {}
+        missing: List[str] = []
+        for col in self.pk_columns:
+            value = payload.get(col)
+            if value is None:
+                missing.append(col)
+                continue
+            pk_values[col] = value
+
+        if missing:
+            raise RuntimeError(
+                "real apply cannot extract PK from payload, missing columns: "
+                + ", ".join(missing)
+            )
+        return pk_values
+
+    def _extract_pk_values(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Извлекает PK-значения в зависимости от режима конфигурации.
+
+        - если задан `APPLY_PK_COLUMNS`: PK читается из payload;
+        - иначе используется `key_json`.
+        """
+        if self.pk_columns:
+            return self._extract_pk_values_from_payload(row)
+        return self._extract_pk_values_from_key(row)
 
     @staticmethod
     def _extract_after_values(row: Dict[str, Any]) -> Dict[str, Any]:
