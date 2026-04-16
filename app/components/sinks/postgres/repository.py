@@ -82,8 +82,6 @@ class PostgresStageApplyRepository:
                 stage.source_table,
                 stage.commit_scn,
                 stage.key_json,
-                stage.before_json,
-                stage.after_json,
                 stage.value_json
             """
         ).format(

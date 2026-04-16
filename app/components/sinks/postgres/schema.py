@@ -32,8 +32,6 @@ class PostgresSchemaManager:
                 source_table TEXT,
                 commit_scn BIGINT,
                 key_json JSONB NOT NULL,
-                before_json JSONB NOT NULL,
-                after_json JSONB NOT NULL,
                 value_json JSONB NOT NULL,
                 apply_status TEXT NOT NULL DEFAULT 'new',
                 apply_action TEXT,

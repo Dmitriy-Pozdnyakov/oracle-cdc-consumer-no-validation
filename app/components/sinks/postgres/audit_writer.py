@@ -22,8 +22,6 @@ class ApplySimulationAuditWriter:
         "source_table",
         "commit_scn",
         "key_json",
-        "before_json",
-        "after_json",
         "value_json",
     ]
 
@@ -58,8 +56,6 @@ class ApplySimulationAuditWriter:
             "source_table": row["source_table"],
             "commit_scn": row["commit_scn"],
             "key_json": self._json_dump(row["key_json"]),
-            "before_json": self._json_dump(row["before_json"]),
-            "after_json": self._json_dump(row["after_json"]),
             "value_json": self._json_dump(row["value_json"]),
         }
         with self.simulation_csv_path.open("a", encoding="utf-8", newline="") as fp:

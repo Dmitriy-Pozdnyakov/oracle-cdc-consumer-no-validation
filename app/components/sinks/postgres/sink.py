@@ -84,11 +84,9 @@ class PostgresSink(Sink):
                 source_table,
                 commit_scn,
                 key_json,
-                before_json,
-                after_json,
                 value_json
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb
+                %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb
             )
             ON CONFLICT (kafka_topic, kafka_partition, kafka_offset) DO NOTHING
             """
@@ -107,8 +105,6 @@ class PostgresSink(Sink):
             source.get("table"),
             source.get("commit_scn"),
             self._json_dump(key_obj),
-            self._json_dump(value_obj.get("before") or {}),
-            self._json_dump(value_obj.get("after") or {}),
             self._json_dump(value_obj),
         )
 

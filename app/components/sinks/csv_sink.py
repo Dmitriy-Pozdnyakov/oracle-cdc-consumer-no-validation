@@ -31,8 +31,6 @@ class CsvSink(Sink):
         "table",
         "commit_scn",
         "key_json",
-        "before_json",
-        "after_json",
         "value_json",
     ]
 
@@ -77,7 +75,7 @@ class CsvSink(Sink):
         Метод формирует плоскую строку аудита:
         - Kafka-метаданные (topic/partition/offset);
         - CDC-метаданные (op/schema/table/commit_scn);
-        - сериализованные `key/before/after/value`.
+        - сериализованные `key/value`.
         """
         source = value_obj.get("source", {}) if isinstance(value_obj.get("source"), dict) else {}
         row = {
@@ -90,8 +88,6 @@ class CsvSink(Sink):
             "table": source.get("table"),
             "commit_scn": source.get("commit_scn"),
             "key_json": self._json_dump(key_obj),
-            "before_json": self._json_dump(value_obj.get("before") or {}),
-            "after_json": self._json_dump(value_obj.get("after") or {}),
             "value_json": self._json_dump(value_obj),
         }
 

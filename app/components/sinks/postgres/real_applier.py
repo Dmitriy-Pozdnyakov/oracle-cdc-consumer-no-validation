@@ -7,7 +7,7 @@
 
 Текущие правила:
 - PK берется из `key_json`;
-- данные для `upsert` берутся из `after_json`;
+- данные для `upsert` берутся из `value_json.data`;
 - `delete` строится по PK из `key_json`;
 - целевая таблица определяется как `<schema>.<source_table>`,
   где schema — `APPLY_TARGET_SCHEMA` (если задан), иначе `source_schema`.
@@ -76,20 +76,8 @@ class PostgresRealApplier:
         return key_json
 
     def _extract_pk_values_from_payload(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """Извлекает PK-значения из payload по `APPLY_PK_COLUMNS`.
-
-        Источник полей:
-        - сначала `after_json` (для `c/u`);
-        - при отсутствии — `before_json` (для `d` и fallback случаев).
-        """
-        payload = row.get("after_json")
-        if not isinstance(payload, dict) or not payload:
-            payload = row.get("before_json")
-        if not isinstance(payload, dict) or not payload:
-            raise RuntimeError(
-                "real apply requires non-empty after_json/before_json "
-                "to extract PK by APPLY_PK_COLUMNS"
-            )
+        """Извлекает PK-значения из `value_json.data` по `APPLY_PK_COLUMNS`."""
+        payload = self._extract_data_values(row)
 
         pk_values: Dict[str, Any] = {}
         missing: List[str] = []
@@ -118,12 +106,15 @@ class PostgresRealApplier:
         return self._extract_pk_values_from_key(row)
 
     @staticmethod
-    def _extract_after_values(row: Dict[str, Any]) -> Dict[str, Any]:
-        """Извлекает значения строки для upsert из `after_json`."""
-        after_json = row.get("after_json")
-        if not isinstance(after_json, dict) or not after_json:
-            raise RuntimeError("real upsert requires non-empty after_json payload")
-        return after_json
+    def _extract_data_values(row: Dict[str, Any]) -> Dict[str, Any]:
+        """Извлекает значения строки из `value_json.data`."""
+        value_json = row.get("value_json")
+        if not isinstance(value_json, dict):
+            raise RuntimeError("real apply requires value_json object")
+        data = value_json.get("data")
+        if not isinstance(data, dict) or not data:
+            raise RuntimeError("real apply requires non-empty value_json.data payload")
+        return data
 
     def _resolve_target(self, row: Dict[str, Any]) -> Tuple[str, str]:
         """Определяет целевую таблицу по данным stage-строки."""
@@ -142,10 +133,10 @@ class PostgresRealApplier:
         """Выполняет INSERT ... ON CONFLICT DO UPDATE для stage-строки."""
         target_schema, target_table = self._resolve_target(row)
         pk_values = self._extract_pk_values(row)
-        after_values = self._extract_after_values(row)
+        data_values = self._extract_data_values(row)
 
-        # На insert всегда включаем PK-поля (если их нет в after_json, дополняем).
-        payload: Dict[str, Any] = dict(after_values)
+        # На insert всегда включаем PK-поля (если их нет в data, дополняем).
+        payload: Dict[str, Any] = dict(data_values)
         for key, value in pk_values.items():
             payload.setdefault(key, value)
 
