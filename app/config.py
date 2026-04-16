@@ -75,6 +75,8 @@ class ApplyConfig:
     - `target_schema`: override схемы target-таблиц для `real` режима.
     - `pk_columns`: optional список PK-колонок для real apply, если `key_json`
       не содержит бизнес-PK и несет транспортную метаинформацию.
+    - `pk_constraint_prefix`: префикс имени PK-constraint для автопоиска
+      (шаблон `<prefix><schema>_<table>`), по умолчанию `cdc_pkey_`.
     """
 
     mode: str
@@ -83,6 +85,7 @@ class ApplyConfig:
     simulation_csv_path: str
     target_schema: str
     pk_columns: List[str]
+    pk_constraint_prefix: str
 
 
 @dataclass
@@ -198,6 +201,7 @@ def load_config_from_env() -> Config:
             for col in os.getenv("APPLY_PK_COLUMNS", "").split(",")
             if col.strip()
         ],
+        pk_constraint_prefix=os.getenv("APPLY_PK_CONSTRAINT_PREFIX", "cdc_pkey_").strip(),
     )
 
     dlq = DlqConfig(

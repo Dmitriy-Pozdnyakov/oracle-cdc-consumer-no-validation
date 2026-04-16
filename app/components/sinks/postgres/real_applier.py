@@ -6,9 +6,13 @@
 - применить действие к целевой таблице Postgres.
 
 Текущие правила:
-- PK берется из `key_json`;
+- PK может определяться по именованному PK-constraint вида
+  `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`;
+- если constraint с таким именем не найден, применяется fallback:
+  - `APPLY_PK_COLUMNS` (если задан);
+  - иначе `key_json` как в базовом режиме;
 - данные для `upsert` берутся из `value_json.data`;
-- `delete` строится по PK из `key_json`;
+- `delete` строится по извлеченному PK;
 - целевая таблица определяется как `<schema>.<source_table>`,
   где schema — `APPLY_TARGET_SCHEMA` (если задан), иначе `source_schema`.
 """
@@ -27,16 +31,21 @@ from app.components.sinks.postgres.config import PostgresSinkSettings
 class PostgresRealApplier:
     """Применяет CDC-изменения в реальные таблицы Postgres."""
 
+    _PG_IDENTIFIER_MAX_LEN = 63
+
     def __init__(
         self,
         settings: PostgresSinkSettings,
         target_schema_override: str,
         pk_columns: List[str],
+        pk_constraint_prefix: str,
     ) -> None:
         self.settings = settings
         self.target_schema_override = target_schema_override.strip()
         self.pk_columns = [col.strip() for col in pk_columns if col.strip()]
+        self.pk_constraint_prefix = pk_constraint_prefix.strip()
         self._conn: Optional[psycopg.Connection] = None
+        self._pk_columns_cache: Dict[Tuple[str, str], Optional[List[str]]] = {}
 
     def _connect(self) -> psycopg.Connection:
         """Открывает соединение к Postgres (лениво)."""
@@ -75,6 +84,96 @@ class PostgresRealApplier:
             raise RuntimeError("real apply requires non-empty key_json for PK matching")
         return key_json
 
+    @staticmethod
+    def _build_expected_pk_constraint_name(prefix: str, target_schema: str, target_table: str) -> str:
+        """Строит ожидаемое имя PK-constraint с учетом лимита PG identifier."""
+        raw_name = f"{prefix}{target_schema}_{target_table}"
+        return raw_name[:PostgresRealApplier._PG_IDENTIFIER_MAX_LEN]
+
+    def _resolve_pk_columns_from_named_constraint(
+        self,
+        target_schema: str,
+        target_table: str,
+    ) -> Optional[List[str]]:
+        """Возвращает PK-колонки из constraint `<prefix><schema>_<table>`.
+
+        Возвращает `None`, если автопоиск по constraint отключен (пустой prefix)
+        или constraint не найден.
+        """
+        if not self.pk_constraint_prefix:
+            return None
+
+        cache_key = (target_schema, target_table)
+        if cache_key in self._pk_columns_cache:
+            return self._pk_columns_cache[cache_key]
+
+        expected_name = self._build_expected_pk_constraint_name(
+            self.pk_constraint_prefix,
+            target_schema,
+            target_table,
+        )
+
+        query = """
+            SELECT attr.attname
+            FROM pg_constraint con
+            JOIN pg_class tbl
+              ON tbl.oid = con.conrelid
+            JOIN pg_namespace ns
+              ON ns.oid = tbl.relnamespace
+            JOIN unnest(con.conkey) WITH ORDINALITY AS key_cols(attnum, ord)
+              ON TRUE
+            JOIN pg_attribute attr
+              ON attr.attrelid = tbl.oid
+             AND attr.attnum = key_cols.attnum
+            WHERE con.contype = 'p'
+              AND ns.nspname = %s
+              AND tbl.relname = %s
+              AND con.conname = %s
+            ORDER BY key_cols.ord
+        """
+
+        conn = self._connect()
+        with conn.cursor() as cur:
+            cur.execute(query, (target_schema, target_table, expected_name))
+            columns = [str(row[0]) for row in cur.fetchall()]
+
+        resolved = columns or None
+        self._pk_columns_cache[cache_key] = resolved
+        return resolved
+
+    def _extract_pk_values_by_columns(
+        self,
+        row: Dict[str, Any],
+        pk_columns: List[str],
+    ) -> Dict[str, Any]:
+        """Извлекает PK-значения по заданному списку колонок.
+
+        Приоритет источников:
+        1) `key_json`;
+        2) `value_json.data`.
+        """
+        key_json_raw = row.get("key_json")
+        key_json = key_json_raw if isinstance(key_json_raw, dict) else {}
+        payload = self._extract_data_values(row)
+
+        pk_values: Dict[str, Any] = {}
+        missing: List[str] = []
+        for col in pk_columns:
+            if key_json.get(col) is not None:
+                pk_values[col] = key_json.get(col)
+                continue
+            if payload.get(col) is not None:
+                pk_values[col] = payload.get(col)
+                continue
+            missing.append(col)
+
+        if missing:
+            raise RuntimeError(
+                "real apply cannot resolve PK values by columns, missing: "
+                + ", ".join(missing)
+            )
+        return pk_values
+
     def _extract_pk_values_from_payload(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Извлекает PK-значения из `value_json.data` по `APPLY_PK_COLUMNS`."""
         payload = self._extract_data_values(row)
@@ -95,12 +194,22 @@ class PostgresRealApplier:
             )
         return pk_values
 
-    def _extract_pk_values(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_pk_values(self, row: Dict[str, Any], target_schema: str, target_table: str) -> Dict[str, Any]:
         """Извлекает PK-значения в зависимости от режима конфигурации.
 
+        Порядок:
+        - если найден именованный constraint `<prefix><schema>_<table>`:
+          PK-колонки берутся из него;
         - если задан `APPLY_PK_COLUMNS`: PK читается из payload;
         - иначе используется `key_json`.
         """
+        constraint_columns = self._resolve_pk_columns_from_named_constraint(
+            target_schema=target_schema,
+            target_table=target_table,
+        )
+        if constraint_columns:
+            return self._extract_pk_values_by_columns(row, constraint_columns)
+
         if self.pk_columns:
             return self._extract_pk_values_from_payload(row)
         return self._extract_pk_values_from_key(row)
@@ -132,7 +241,7 @@ class PostgresRealApplier:
     def _upsert(self, row: Dict[str, Any]) -> None:
         """Выполняет INSERT ... ON CONFLICT DO UPDATE для stage-строки."""
         target_schema, target_table = self._resolve_target(row)
-        pk_values = self._extract_pk_values(row)
+        pk_values = self._extract_pk_values(row, target_schema, target_table)
         data_values = self._extract_data_values(row)
 
         # На insert всегда включаем PK-поля (если их нет в data, дополняем).
@@ -184,9 +293,9 @@ class PostgresRealApplier:
             raise
 
     def _hard_delete(self, row: Dict[str, Any]) -> None:
-        """Выполняет DELETE по PK из `key_json`."""
+        """Выполняет DELETE по извлеченному PK."""
         target_schema, target_table = self._resolve_target(row)
-        pk_values = self._extract_pk_values(row)
+        pk_values = self._extract_pk_values(row, target_schema, target_table)
 
         where_sql = sql.SQL(" AND ").join(
             sql.SQL("{} = %s").format(sql.Identifier(col)) for col in pk_values.keys()

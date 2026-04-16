@@ -36,6 +36,7 @@ class PostgresApplyOrchestrator:
         simulation_csv_path: str,
         target_schema_override: str,
         pk_columns: List[str],
+        pk_constraint_prefix: str,
         batch_size: int,
         max_rows: int,
         repository: Optional[PostgresStageApplyRepository] = None,
@@ -53,6 +54,7 @@ class PostgresApplyOrchestrator:
             settings=settings,
             target_schema_override=target_schema_override,
             pk_columns=pk_columns,
+            pk_constraint_prefix=pk_constraint_prefix,
         )
 
     @staticmethod
