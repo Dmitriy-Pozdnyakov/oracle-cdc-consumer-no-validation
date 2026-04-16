@@ -26,3 +26,5 @@ scripts/
 AGENTS.md
 PLAN.md
 CHANGELOG.md
+state/*
+sync.sh
