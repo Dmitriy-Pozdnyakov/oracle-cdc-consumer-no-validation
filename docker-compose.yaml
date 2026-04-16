@@ -8,7 +8,9 @@ services:
       - ./certs/ca.crt:/certs/ca.crt:ro
       - ./state:/state
     restart: "no"
-
+    networks:
+      - data_platform_services
+      
   oracle-cdc-apply-no-validation:
     build: .
     env_file:
@@ -18,3 +20,10 @@ services:
       - ./certs/ca.crt:/certs/ca.crt:ro
       - ./state:/state
     restart: "no"
+    networks:
+      - data_platform_services
+
+networks:
+  data_platform_services:
+    external: true
+    name: data_platform_services
