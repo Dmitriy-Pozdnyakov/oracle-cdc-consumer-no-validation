@@ -44,7 +44,11 @@ class PostgresRealApplier:
     ) -> None:
         self.settings = settings
         self.target_schema_override = target_schema_override.strip()
-        self.pk_columns = [col.strip() for col in pk_columns if col.strip()]
+        self.pk_columns = []
+        for col in pk_columns:
+            normalized = self._normalize_identifier(col)
+            if normalized:
+                self.pk_columns.append(normalized)
         self.pk_constraint_prefix = pk_constraint_prefix.strip()
         self._conn: Optional[psycopg.Connection] = None
         self._pk_columns_cache: Dict[Tuple[str, str], Optional[List[str]]] = {}
@@ -84,7 +88,7 @@ class PostgresRealApplier:
         key_json = row.get("key_json")
         if not isinstance(key_json, dict) or not key_json:
             raise RuntimeError("real apply requires non-empty key_json for PK matching")
-        return key_json
+        return PostgresRealApplier._normalize_column_mapping(key_json, "key_json")
 
     @staticmethod
     def _build_expected_pk_constraint_name(prefix: str, target_schema: str, target_table: str) -> str:
@@ -137,7 +141,7 @@ class PostgresRealApplier:
         conn = self._connect()
         with conn.cursor() as cur:
             cur.execute(query, (target_schema, target_table, expected_name))
-            columns = [str(row[0]) for row in cur.fetchall()]
+            columns = [self._normalize_identifier(row[0]) for row in cur.fetchall()]
 
         resolved = columns or None
         self._pk_columns_cache[cache_key] = resolved
@@ -155,19 +159,26 @@ class PostgresRealApplier:
         2) `value_json.data`.
         """
         key_json_raw = row.get("key_json")
-        key_json = key_json_raw if isinstance(key_json_raw, dict) else {}
+        key_json = (
+            self._normalize_column_mapping(key_json_raw, "key_json")
+            if isinstance(key_json_raw, dict)
+            else {}
+        )
         payload = self._extract_data_values(row)
 
         pk_values: Dict[str, Any] = {}
         missing: List[str] = []
         for col in pk_columns:
-            if key_json.get(col) is not None:
-                pk_values[col] = key_json.get(col)
+            normalized_col = self._normalize_identifier(col)
+            if not normalized_col:
                 continue
-            if payload.get(col) is not None:
-                pk_values[col] = payload.get(col)
+            if key_json.get(normalized_col) is not None:
+                pk_values[normalized_col] = key_json.get(normalized_col)
                 continue
-            missing.append(col)
+            if payload.get(normalized_col) is not None:
+                pk_values[normalized_col] = payload.get(normalized_col)
+                continue
+            missing.append(normalized_col)
 
         if missing:
             raise RuntimeError(
@@ -225,7 +236,7 @@ class PostgresRealApplier:
         data = value_json.get("data")
         if not isinstance(data, dict) or not data:
             raise RuntimeError("real apply requires non-empty value_json.data payload")
-        return data
+        return PostgresRealApplier._normalize_column_mapping(data, "value_json.data")
 
     @staticmethod
     def _normalize_identifier(value: Any) -> str:
@@ -234,6 +245,22 @@ class PostgresRealApplier:
         if not raw:
             return ""
         return raw.lower()
+
+    @staticmethod
+    def _normalize_column_mapping(raw: Dict[str, Any], source: str) -> Dict[str, Any]:
+        """Нормализует ключи колонок к lower-case и проверяет коллизии."""
+        normalized: Dict[str, Any] = {}
+        for raw_col, value in raw.items():
+            normalized_col = PostgresRealApplier._normalize_identifier(raw_col)
+            if not normalized_col:
+                raise RuntimeError(f"real apply received empty column name in {source}")
+            if normalized_col in normalized:
+                raise RuntimeError(
+                    f"real apply detected duplicate column after lowercase normalization in {source}: "
+                    f"{normalized_col}"
+                )
+            normalized[normalized_col] = value
+        return normalized
 
     def _resolve_target(self, row: Dict[str, Any]) -> Tuple[str, str]:
         """Определяет целевую таблицу по данным stage-строки."""
