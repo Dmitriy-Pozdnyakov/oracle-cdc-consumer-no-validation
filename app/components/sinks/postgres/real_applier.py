@@ -8,9 +8,8 @@
 Текущие правила:
 - PK может определяться по именованному PK-constraint вида
   `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`;
-- если constraint с таким именем не найден, применяется fallback:
-  - `APPLY_PK_COLUMNS` (если задан);
-  - иначе `key_json` как в базовом режиме;
+- fallback-режим отключен: если именованный PK-constraint не найден,
+  `real apply` завершает обработку строки с ошибкой;
 - данные для `upsert` берутся из `value_json.data`;
 - `delete` строится по извлеченному PK;
 - целевая таблица берется из stage-полей `target_schema/target_table`;
@@ -39,17 +38,14 @@ class PostgresRealApplier:
         self,
         settings: PostgresSinkSettings,
         target_schema_override: str,
-        pk_columns: List[str],
         pk_constraint_prefix: str,
     ) -> None:
         self.settings = settings
         self.target_schema_override = target_schema_override.strip()
-        self.pk_columns = []
-        for col in pk_columns:
-            normalized = self._normalize_identifier(col)
-            if normalized:
-                self.pk_columns.append(normalized)
         self.pk_constraint_prefix = pk_constraint_prefix.strip()
+        if not self.pk_constraint_prefix:
+            raise RuntimeError("real apply requires non-empty APPLY_PK_CONSTRAINT_PREFIX")
+
         self._conn: Optional[psycopg.Connection] = None
         self._pk_columns_cache: Dict[Tuple[str, str], Optional[List[str]]] = {}
 
@@ -83,14 +79,6 @@ class PostgresRealApplier:
         return value
 
     @staticmethod
-    def _extract_pk_values_from_key(row: Dict[str, Any]) -> Dict[str, Any]:
-        """Извлекает PK-значения из `key_json` (базовый режим)."""
-        key_json = row.get("key_json")
-        if not isinstance(key_json, dict) or not key_json:
-            raise RuntimeError("real apply requires non-empty key_json for PK matching")
-        return PostgresRealApplier._normalize_column_mapping(key_json, "key_json")
-
-    @staticmethod
     def _build_expected_pk_constraint_name(prefix: str, target_schema: str, target_table: str) -> str:
         """Строит ожидаемое имя PK-constraint с учетом лимита PG identifier."""
         raw_name = f"{prefix}{target_schema}_{target_table}"
@@ -103,12 +91,8 @@ class PostgresRealApplier:
     ) -> Optional[List[str]]:
         """Возвращает PK-колонки из constraint `<prefix><schema>_<table>`.
 
-        Возвращает `None`, если автопоиск по constraint отключен (пустой prefix)
-        или constraint не найден.
+        Возвращает `None`, если constraint не найден.
         """
-        if not self.pk_constraint_prefix:
-            return None
-
         cache_key = (target_schema, target_table)
         if cache_key in self._pk_columns_cache:
             return self._pk_columns_cache[cache_key]
@@ -187,45 +171,23 @@ class PostgresRealApplier:
             )
         return pk_values
 
-    def _extract_pk_values_from_payload(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        """Извлекает PK-значения из `value_json.data` по `APPLY_PK_COLUMNS`."""
-        payload = self._extract_data_values(row)
-
-        pk_values: Dict[str, Any] = {}
-        missing: List[str] = []
-        for col in self.pk_columns:
-            value = payload.get(col)
-            if value is None:
-                missing.append(col)
-                continue
-            pk_values[col] = value
-
-        if missing:
-            raise RuntimeError(
-                "real apply cannot extract PK from payload, missing columns: "
-                + ", ".join(missing)
-            )
-        return pk_values
-
     def _extract_pk_values(self, row: Dict[str, Any], target_schema: str, target_table: str) -> Dict[str, Any]:
-        """Извлекает PK-значения в зависимости от режима конфигурации.
-
-        Порядок:
-        - если найден именованный constraint `<prefix><schema>_<table>`:
-          PK-колонки берутся из него;
-        - если задан `APPLY_PK_COLUMNS`: PK читается из payload;
-        - иначе используется `key_json`.
-        """
+        """Извлекает PK-значения по именованному PK-constraint target-таблицы."""
         constraint_columns = self._resolve_pk_columns_from_named_constraint(
             target_schema=target_schema,
             target_table=target_table,
         )
-        if constraint_columns:
-            return self._extract_pk_values_by_columns(row, constraint_columns)
-
-        if self.pk_columns:
-            return self._extract_pk_values_from_payload(row)
-        return self._extract_pk_values_from_key(row)
+        if not constraint_columns:
+            expected_name = self._build_expected_pk_constraint_name(
+                self.pk_constraint_prefix,
+                target_schema,
+                target_table,
+            )
+            raise RuntimeError(
+                "real apply cannot resolve PK columns: named primary key constraint not found "
+                f"(expected={expected_name}, table={target_schema}.{target_table})"
+            )
+        return self._extract_pk_values_by_columns(row, constraint_columns)
 
     @staticmethod
     def _extract_data_values(row: Dict[str, Any]) -> Dict[str, Any]:

@@ -83,7 +83,8 @@
 - `sinks/postgres/real_applier.py`:
   - реальный `upsert/delete` в target-таблицы Postgres;
   - данные для применения берутся из `value_json.data`;
-  - PK для `upsert/delete` определяется по `key_json` или `APPLY_PK_COLUMNS`;
+  - PK для `upsert/delete` определяется по именованному PK-constraint
+    `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`;
   - schema выбирается из `APPLY_TARGET_SCHEMA` или `source_schema`.
 - `sinks/postgres/apply_orchestrator.py`:
   - orchestration one-shot apply (`simulate|real`);

@@ -19,7 +19,7 @@ Postgres-подкомпонент для двухшагового контура
 - Apply работает по статусам `apply_status` (`new`, `processing`, `applied_simulated`, `applied_real`, `error`).
 - Порядок применения опирается на `(topic, partition, offset)`.
 - `real` apply читает payload только из `value_json.data`.
-- Для `real` apply PK извлекается в порядке fallback:
-  - по именованному PK-constraint `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`;
-  - из payload по `APPLY_PK_COLUMNS` (если constraint не найден);
-  - из `key_json` (если не сработали варианты выше).
+- Для `real` apply PK определяется только по именованному PK-constraint
+  `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`.
+- Если PK-constraint с ожидаемым именем не найден, запись помечается как `error`
+  с явным текстом причины (fallback отключен).

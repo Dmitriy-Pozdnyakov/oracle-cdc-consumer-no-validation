@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from app.components.sinks.postgres.audit_writer import ApplySimulationAuditWriter
 from app.components.sinks.postgres.config import PostgresSinkSettings
@@ -35,7 +35,6 @@ class PostgresApplyOrchestrator:
         apply_mode: str,
         simulation_csv_path: str,
         target_schema_override: str,
-        pk_columns: List[str],
         pk_constraint_prefix: str,
         batch_size: int,
         max_rows: int,
@@ -53,7 +52,6 @@ class PostgresApplyOrchestrator:
         self._real_applier = real_applier or PostgresRealApplier(
             settings=settings,
             target_schema_override=target_schema_override,
-            pk_columns=pk_columns,
             pk_constraint_prefix=pk_constraint_prefix,
         )
 

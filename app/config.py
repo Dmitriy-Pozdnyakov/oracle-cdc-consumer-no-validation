@@ -73,8 +73,6 @@ class ApplyConfig:
     - `batch_size`/`max_rows`: лимиты one-shot запуска;
     - `simulation_csv_path`: CSV-аудит действий apply;
     - `target_schema`: override схемы target-таблиц для `real` режима.
-    - `pk_columns`: optional список PK-колонок для real apply, если `key_json`
-      не содержит бизнес-PK и несет транспортную метаинформацию.
     - `pk_constraint_prefix`: префикс имени PK-constraint для автопоиска
       (шаблон `<prefix><schema>_<table>`), по умолчанию `cdc_pkey_`.
     """
@@ -84,7 +82,6 @@ class ApplyConfig:
     max_rows: int
     simulation_csv_path: str
     target_schema: str
-    pk_columns: List[str]
     pk_constraint_prefix: str
 
 
@@ -196,11 +193,6 @@ def load_config_from_env() -> Config:
         max_rows=int(os.getenv("APPLY_MAX_ROWS", "5000")),
         simulation_csv_path=os.getenv("APPLY_SIMULATION_CSV_PATH", "/state/apply_simulation.csv").strip(),
         target_schema=os.getenv("APPLY_TARGET_SCHEMA", "").strip(),
-        pk_columns=[
-            col.strip()
-            for col in os.getenv("APPLY_PK_COLUMNS", "").split(",")
-            if col.strip()
-        ],
         pk_constraint_prefix=os.getenv("APPLY_PK_CONSTRAINT_PREFIX", "cdc_pkey_").strip(),
     )
 
@@ -279,8 +271,8 @@ def validate_config(cfg: Config) -> None:
         raise RuntimeError("APPLY_MAX_ROWS must be > 0")
     if not cfg.apply.simulation_csv_path:
         raise RuntimeError("APPLY_SIMULATION_CSV_PATH is required")
-    if len({col.lower() for col in cfg.apply.pk_columns}) != len(cfg.apply.pk_columns):
-        raise RuntimeError("APPLY_PK_COLUMNS contains duplicates (case-insensitive)")
+    if not cfg.apply.pk_constraint_prefix:
+        raise RuntimeError("APPLY_PK_CONSTRAINT_PREFIX is required for strict real apply mode")
 
     if cfg.dlq.bad_message_policy not in {"strict", "skip", "dlq"}:
         raise RuntimeError("BAD_MESSAGE_POLICY must be one of: strict, skip, dlq")

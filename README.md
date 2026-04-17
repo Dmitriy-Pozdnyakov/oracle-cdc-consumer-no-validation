@@ -148,9 +148,6 @@ Consumer завершает работу, когда выполняется од
 - `APPLY_TARGET_SCHEMA` — override target schema для `real` режима (если пусто, используется `source_schema`).
 - `APPLY_PK_CONSTRAINT_PREFIX` — префикс PK-constraint для авто-резолва PK
   в `real` режиме (`<prefix><schema>_<table>`, по умолчанию `cdc_pkey_`).
-- `APPLY_PK_COLUMNS` — опциональный список PK-колонок через запятую для `real` режима.
-  Нужен для producer-форматов, где `key` не содержит бизнес-PK, а несет transport metadata.
-  Используется как fallback, если именованный PK-constraint не найден.
 
 ## Bad Message Policy
 
