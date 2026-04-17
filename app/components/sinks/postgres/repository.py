@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from app.components.sinks.postgres.config import PostgresSinkSettings
 from app.components.sinks.postgres.schema import PostgresSchemaManager
@@ -49,6 +50,13 @@ class PostgresStageApplyRepository:
 
         return conn
 
+    @staticmethod
+    def _clip_text(value: Optional[str], max_len: int) -> Optional[str]:
+        """Обрезает длинный текст до безопасного лимита хранения."""
+        if value is None:
+            return None
+        return value[:max_len]
+
     def claim_new_rows(self, limit: int) -> List[Dict[str, Any]]:
         """Забирает батч `new` записей и атомарно переводит их в `processing`."""
         conn = self._connect()
@@ -67,7 +75,8 @@ class PostgresStageApplyRepository:
                 apply_status = 'processing',
                 apply_started_at_utc = NOW(),
                 apply_finished_at_utc = NULL,
-                apply_error_text = NULL
+                apply_error_text = NULL,
+                apply_sql_text = NULL
             FROM candidate
             WHERE
                 stage.kafka_topic = candidate.kafka_topic
@@ -103,7 +112,15 @@ class PostgresStageApplyRepository:
             conn.rollback()
             raise
 
-    def mark_applied(self, row: Dict[str, Any], action: str, status: str) -> None:
+    def mark_applied(
+        self,
+        row: Dict[str, Any],
+        action: str,
+        status: str,
+        target_pkey_name: Optional[str] = None,
+        target_pkey_columns: Optional[List[str]] = None,
+        apply_sql_text: Optional[str] = None,
+    ) -> None:
         """Фиксирует успешное применение apply по одной stage-записи."""
         conn = self._connect()
         update_sql = sql.SQL(
@@ -112,6 +129,9 @@ class PostgresStageApplyRepository:
             SET
                 apply_status = %s,
                 apply_action = %s,
+                target_pkey_name = %s,
+                target_pkey_columns = %s::jsonb,
+                apply_sql_text = %s,
                 apply_finished_at_utc = NOW(),
                 apply_error_text = NULL
             WHERE
@@ -131,6 +151,9 @@ class PostgresStageApplyRepository:
                     (
                         status,
                         action,
+                        target_pkey_name,
+                        Jsonb(target_pkey_columns) if target_pkey_columns is not None else None,
+                        self._clip_text(apply_sql_text, 64000),
                         row["kafka_topic"],
                         row["kafka_partition"],
                         row["kafka_offset"],
@@ -141,7 +164,14 @@ class PostgresStageApplyRepository:
             conn.rollback()
             raise
 
-    def mark_error(self, row: Dict[str, Any], error_text: str) -> None:
+    def mark_error(
+        self,
+        row: Dict[str, Any],
+        error_text: str,
+        apply_sql_text: Optional[str] = None,
+        target_pkey_name: Optional[str] = None,
+        target_pkey_columns: Optional[List[str]] = None,
+    ) -> None:
         """Фиксирует ошибку apply и увеличивает retry-счетчик."""
         conn = self._connect()
         update_sql = sql.SQL(
@@ -150,6 +180,9 @@ class PostgresStageApplyRepository:
             SET
                 apply_status = 'error',
                 apply_error_text = %s,
+                target_pkey_name = %s,
+                target_pkey_columns = %s::jsonb,
+                apply_sql_text = %s,
                 apply_retry_count = apply_retry_count + 1,
                 apply_finished_at_utc = NOW()
             WHERE
@@ -168,6 +201,9 @@ class PostgresStageApplyRepository:
                     update_sql,
                     (
                         error_text[:8000],
+                        target_pkey_name,
+                        Jsonb(target_pkey_columns) if target_pkey_columns is not None else None,
+                        self._clip_text(apply_sql_text, 64000),
                         row["kafka_topic"],
                         row["kafka_partition"],
                         row["kafka_offset"],

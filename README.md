@@ -106,6 +106,8 @@ Consumer завершает работу, когда выполняется од
    - `real`: выполняет реальный `upsert/delete` в target-таблицы Postgres.
 4. Результат фиксируется:
    - в stage-статусах (`apply_status`, `apply_action`, `apply_error_text`);
+   - в PK-диагностике (`target_pkey_name`, `target_pkey_columns`) для `real` режима;
+   - в SQL-диагностике (`apply_sql_text`) для `real` режима;
    - в CSV-аудите `APPLY_SIMULATION_CSV_PATH`.
 
 Важно:
@@ -117,7 +119,10 @@ Consumer завершает работу, когда выполняется од
 - `processing` — запись взята в текущий apply-batch;
 - `applied_simulated` — симуляция успешна;
 - `applied_real` — реальное применение в target-таблицу успешно;
+  дополнительно сохранены `target_pkey_name` и `target_pkey_columns`;
+  SQL сохраняется по настройке `APPLY_SQL_AUDIT_MODE` (`off|full`);
 - `error` — применение завершилось ошибкой (увеличен `apply_retry_count`).
+  Для `real` режима в `apply_sql_text` сохраняется SQL запроса (если он был сформирован).
 
 ## Sink Конфигурация
 
@@ -148,6 +153,10 @@ Consumer завершает работу, когда выполняется од
 - `APPLY_TARGET_SCHEMA` — override target schema для `real` режима (если пусто, используется `source_schema`).
 - `APPLY_PK_CONSTRAINT_PREFIX` — префикс PK-constraint для авто-резолва PK
   в `real` режиме (`<prefix><schema>_<table>`, по умолчанию `cdc_pkey_`).
+- `APPLY_SQL_AUDIT_MODE` — режим SQL-аудита в stage (`off` или `full`):
+  - `off` — не сохранять SQL при `applied_real`;
+  - `full` — сохранять SQL при `applied_real`;
+  - при `error` SQL сохраняется всегда (если запрос был сформирован).
 
 ## Bad Message Policy
 

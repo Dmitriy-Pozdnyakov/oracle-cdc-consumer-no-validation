@@ -32,12 +32,15 @@ class PostgresSchemaManager:
                 source_table TEXT,
                 target_schema TEXT,
                 target_table TEXT,
+                target_pkey_name TEXT,
+                target_pkey_columns JSONB,
                 commit_scn BIGINT,
                 key_json JSONB NOT NULL,
                 value_json JSONB NOT NULL,
                 apply_status TEXT NOT NULL DEFAULT 'new',
                 apply_action TEXT,
                 apply_error_text TEXT,
+                apply_sql_text TEXT,
                 apply_retry_count INTEGER NOT NULL DEFAULT 0,
                 apply_started_at_utc TIMESTAMPTZ,
                 apply_finished_at_utc TIMESTAMPTZ,
@@ -55,11 +58,20 @@ class PostgresSchemaManager:
         ensure_target_table_sql = sql.SQL(
             "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS target_table TEXT"
         ).format(schema_ident, table_ident)
+        ensure_target_pkey_name_sql = sql.SQL(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS target_pkey_name TEXT"
+        ).format(schema_ident, table_ident)
+        ensure_target_pkey_columns_sql = sql.SQL(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS target_pkey_columns JSONB"
+        ).format(schema_ident, table_ident)
         ensure_apply_action_sql = sql.SQL(
             "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS apply_action TEXT"
         ).format(schema_ident, table_ident)
         ensure_apply_error_text_sql = sql.SQL(
             "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS apply_error_text TEXT"
+        ).format(schema_ident, table_ident)
+        ensure_apply_sql_text_sql = sql.SQL(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS apply_sql_text TEXT"
         ).format(schema_ident, table_ident)
         ensure_apply_retry_count_sql = sql.SQL(
             "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS apply_retry_count INTEGER NOT NULL DEFAULT 0"
@@ -89,9 +101,12 @@ class PostgresSchemaManager:
             # Миграция для ранее созданных таблиц (до появления apply-* колонок).
             cur.execute(ensure_target_schema_sql)
             cur.execute(ensure_target_table_sql)
+            cur.execute(ensure_target_pkey_name_sql)
+            cur.execute(ensure_target_pkey_columns_sql)
             cur.execute(ensure_apply_status_sql)
             cur.execute(ensure_apply_action_sql)
             cur.execute(ensure_apply_error_text_sql)
+            cur.execute(ensure_apply_sql_text_sql)
             cur.execute(ensure_apply_retry_count_sql)
             cur.execute(ensure_apply_started_at_sql)
             cur.execute(ensure_apply_finished_at_sql)

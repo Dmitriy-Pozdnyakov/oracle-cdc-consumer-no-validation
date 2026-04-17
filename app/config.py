@@ -75,6 +75,7 @@ class ApplyConfig:
     - `target_schema`: override схемы target-таблиц для `real` режима.
     - `pk_constraint_prefix`: префикс имени PK-constraint для автопоиска
       (шаблон `<prefix><schema>_<table>`), по умолчанию `cdc_pkey_`.
+    - `sql_audit_mode`: режим сохранения SQL-аудита (`off` или `full`).
     """
 
     mode: str
@@ -83,6 +84,7 @@ class ApplyConfig:
     simulation_csv_path: str
     target_schema: str
     pk_constraint_prefix: str
+    sql_audit_mode: str
 
 
 @dataclass
@@ -194,6 +196,7 @@ def load_config_from_env() -> Config:
         simulation_csv_path=os.getenv("APPLY_SIMULATION_CSV_PATH", "/state/apply_simulation.csv").strip(),
         target_schema=os.getenv("APPLY_TARGET_SCHEMA", "").strip(),
         pk_constraint_prefix=os.getenv("APPLY_PK_CONSTRAINT_PREFIX", "cdc_pkey_").strip(),
+        sql_audit_mode=os.getenv("APPLY_SQL_AUDIT_MODE", "off").strip().lower(),
     )
 
     dlq = DlqConfig(
@@ -273,6 +276,8 @@ def validate_config(cfg: Config) -> None:
         raise RuntimeError("APPLY_SIMULATION_CSV_PATH is required")
     if not cfg.apply.pk_constraint_prefix:
         raise RuntimeError("APPLY_PK_CONSTRAINT_PREFIX is required for strict real apply mode")
+    if cfg.apply.sql_audit_mode not in {"off", "full"}:
+        raise RuntimeError("APPLY_SQL_AUDIT_MODE must be one of: off, full")
 
     if cfg.dlq.bad_message_policy not in {"strict", "skip", "dlq"}:
         raise RuntimeError("BAD_MESSAGE_POLICY must be one of: strict, skip, dlq")

@@ -30,6 +30,7 @@ class OneShotApplyRunner:
             simulation_csv_path=cfg.apply.simulation_csv_path,
             target_schema_override=cfg.apply.target_schema,
             pk_constraint_prefix=cfg.apply.pk_constraint_prefix,
+            sql_audit_mode=cfg.apply.sql_audit_mode,
             batch_size=cfg.apply.batch_size,
             max_rows=cfg.apply.max_rows,
         )

@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from app.components.sinks.postgres.audit_writer import ApplySimulationAuditWriter
 from app.components.sinks.postgres.config import PostgresSinkSettings
-from app.components.sinks.postgres.real_applier import PostgresRealApplier
+from app.components.sinks.postgres.real_applier import PostgresRealApplier, RealApplyExecutionError
 from app.components.sinks.postgres.repository import PostgresStageApplyRepository
 from app.components.stats import ApplyBatchStats
 
@@ -36,6 +36,7 @@ class PostgresApplyOrchestrator:
         simulation_csv_path: str,
         target_schema_override: str,
         pk_constraint_prefix: str,
+        sql_audit_mode: str,
         batch_size: int,
         max_rows: int,
         repository: Optional[PostgresStageApplyRepository] = None,
@@ -47,12 +48,14 @@ class PostgresApplyOrchestrator:
         self.apply_mode = apply_mode
         self.batch_size = batch_size
         self.max_rows = max_rows
+        self.sql_audit_mode = sql_audit_mode
         self._repository = repository or PostgresStageApplyRepository(settings)
         self._audit_writer = audit_writer or ApplySimulationAuditWriter(simulation_csv_path)
         self._real_applier = real_applier or PostgresRealApplier(
             settings=settings,
             target_schema_override=target_schema_override,
             pk_constraint_prefix=pk_constraint_prefix,
+            sql_audit_mode=sql_audit_mode,
         )
 
     @staticmethod
@@ -84,15 +87,23 @@ class PostgresApplyOrchestrator:
             f"start apply ({self.apply_mode}) "
             f"(table={self.settings.schema}.{self.settings.table}, "
             f"batch_size={self.batch_size}, max_rows={self.max_rows}, "
-            f"simulation_csv={self._audit_writer.simulation_csv_path})"
+            f"simulation_csv={self._audit_writer.simulation_csv_path}, "
+            f"sql_audit_mode={self.sql_audit_mode})"
         )
 
     def _process_claimed_row(self, row: Dict[str, Any], stats: ApplyBatchStats) -> None:
         """Обрабатывает одну stage-запись из already-claimed батча."""
         stats.processed += 1
         try:
+            target_pkey_name = None
+            target_pkey_columns = None
+            apply_sql_text = None
             if self.apply_mode == "real":
-                action = self._real_applier.apply_row(row)
+                real_result = self._real_applier.apply_row(row)
+                action = real_result.action
+                target_pkey_name = real_result.target_pkey_name
+                target_pkey_columns = real_result.target_pkey_columns
+                apply_sql_text = real_result.applied_sql_text
             else:
                 action = self._resolve_action(str(row.get("op")))
 
@@ -104,6 +115,9 @@ class PostgresApplyOrchestrator:
                 row,
                 action,
                 self._resolve_applied_status(self.apply_mode),
+                target_pkey_name=target_pkey_name,
+                target_pkey_columns=target_pkey_columns,
+                apply_sql_text=apply_sql_text,
             )
             stats.applied += 1
             if action == "hard_delete":
@@ -112,8 +126,21 @@ class PostgresApplyOrchestrator:
                 stats.upserted += 1
         except Exception as exc:
             stats.errors += 1
+            error_sql_text = None
+            target_pkey_name = None
+            target_pkey_columns = None
+            if isinstance(exc, RealApplyExecutionError):
+                error_sql_text = exc.applied_sql_text
+                target_pkey_name = exc.target_pkey_name
+                target_pkey_columns = exc.target_pkey_columns
             try:
-                self._repository.mark_error(row, str(exc))
+                self._repository.mark_error(
+                    row,
+                    str(exc),
+                    apply_sql_text=error_sql_text,
+                    target_pkey_name=target_pkey_name,
+                    target_pkey_columns=target_pkey_columns,
+                )
             except Exception as mark_exc:
                 self.logger.error(
                     "failed to mark apply error "

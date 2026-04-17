@@ -85,6 +85,9 @@
   - данные для применения берутся из `value_json.data`;
   - PK для `upsert/delete` определяется по именованному PK-constraint
     `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`;
+  - в `applied_real` фиксирует в stage `target_pkey_name` и `target_pkey_columns`;
+  - SQL запроса пишет в `apply_sql_text`:
+    при `APPLY_SQL_AUDIT_MODE=full` для успеха и всегда при error.
   - schema выбирается из `APPLY_TARGET_SCHEMA` или `source_schema`.
 - `sinks/postgres/apply_orchestrator.py`:
   - orchestration one-shot apply (`simulate|real`);

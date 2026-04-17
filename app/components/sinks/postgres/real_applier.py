@@ -10,6 +10,10 @@
   `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`;
 - fallback-режим отключен: если именованный PK-constraint не найден,
   `real apply` завершает обработку строки с ошибкой;
+- SQL-аудит:
+  - `APPLY_SQL_AUDIT_MODE=full` — сохраняем полный SQL в `stage.apply_sql_text`;
+  - `APPLY_SQL_AUDIT_MODE=off` — SQL не сохраняем при успехе;
+  - при ошибке SQL сохраняется всегда (если запрос уже был сформирован);
 - данные для `upsert` берутся из `value_json.data`;
 - `delete` строится по извлеченному PK;
 - целевая таблица берется из stage-полей `target_schema/target_table`;
@@ -20,6 +24,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
@@ -27,6 +32,32 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from app.components.sinks.postgres.config import PostgresSinkSettings
+
+
+@dataclass(frozen=True)
+class RealApplyResult:
+    """Результат применения одной stage-строки в target-таблицу."""
+
+    action: str
+    target_pkey_name: Optional[str]
+    target_pkey_columns: Optional[List[str]]
+    applied_sql_text: Optional[str]
+
+
+class RealApplyExecutionError(RuntimeError):
+    """Ошибка real apply с диагностикой SQL/PK для stage-аудита."""
+
+    def __init__(
+        self,
+        message: str,
+        applied_sql_text: Optional[str] = None,
+        target_pkey_name: Optional[str] = None,
+        target_pkey_columns: Optional[List[str]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.applied_sql_text = applied_sql_text
+        self.target_pkey_name = target_pkey_name
+        self.target_pkey_columns = target_pkey_columns
 
 
 class PostgresRealApplier:
@@ -39,15 +70,19 @@ class PostgresRealApplier:
         settings: PostgresSinkSettings,
         target_schema_override: str,
         pk_constraint_prefix: str,
+        sql_audit_mode: str,
     ) -> None:
         self.settings = settings
         self.target_schema_override = target_schema_override.strip()
         self.pk_constraint_prefix = pk_constraint_prefix.strip()
         if not self.pk_constraint_prefix:
             raise RuntimeError("real apply requires non-empty APPLY_PK_CONSTRAINT_PREFIX")
+        self.sql_audit_mode = str(sql_audit_mode).strip().lower()
+        if self.sql_audit_mode not in {"off", "full"}:
+            raise RuntimeError("real apply sql_audit_mode must be one of: off, full")
 
         self._conn: Optional[psycopg.Connection] = None
-        self._pk_columns_cache: Dict[Tuple[str, str], Optional[List[str]]] = {}
+        self._pk_columns_cache: Dict[Tuple[str, str], Optional[Tuple[str, List[str]]]] = {}
 
     def _connect(self) -> psycopg.Connection:
         """Открывает соединение к Postgres (лениво)."""
@@ -79,6 +114,24 @@ class PostgresRealApplier:
         return value
 
     @staticmethod
+    def _render_sql_for_audit(
+        cur: psycopg.Cursor,
+        query: sql.Composed,
+        params: List[Any],
+    ) -> str:
+        """Рендерит SQL с подставленными параметрами для аудита/debug."""
+        try:
+            rendered = cur.mogrify(query, params)
+            if isinstance(rendered, bytes):
+                return rendered.decode("utf-8", errors="replace")
+            return str(rendered)
+        except Exception:
+            try:
+                return query.as_string(cur.connection)
+            except Exception:
+                return str(query)
+
+    @staticmethod
     def _build_expected_pk_constraint_name(prefix: str, target_schema: str, target_table: str) -> str:
         """Строит ожидаемое имя PK-constraint с учетом лимита PG identifier."""
         raw_name = f"{prefix}{target_schema}_{target_table}"
@@ -88,7 +141,7 @@ class PostgresRealApplier:
         self,
         target_schema: str,
         target_table: str,
-    ) -> Optional[List[str]]:
+    ) -> Optional[Tuple[str, List[str]]]:
         """Возвращает PK-колонки из constraint `<prefix><schema>_<table>`.
 
         Возвращает `None`, если constraint не найден.
@@ -104,7 +157,7 @@ class PostgresRealApplier:
         )
 
         query = """
-            SELECT attr.attname
+            SELECT con.conname, attr.attname
             FROM pg_constraint con
             JOIN pg_class tbl
               ON tbl.oid = con.conrelid
@@ -125,9 +178,14 @@ class PostgresRealApplier:
         conn = self._connect()
         with conn.cursor() as cur:
             cur.execute(query, (target_schema, target_table, expected_name))
-            columns = [self._normalize_identifier(row[0]) for row in cur.fetchall()]
+            rows = cur.fetchall()
 
-        resolved = columns or None
+        if not rows:
+            resolved = None
+        else:
+            constraint_name = str(rows[0][0])
+            columns = [self._normalize_identifier(row[1]) for row in rows]
+            resolved = (constraint_name, columns)
         self._pk_columns_cache[cache_key] = resolved
         return resolved
 
@@ -171,13 +229,13 @@ class PostgresRealApplier:
             )
         return pk_values
 
-    def _extract_pk_values(self, row: Dict[str, Any], target_schema: str, target_table: str) -> Dict[str, Any]:
-        """Извлекает PK-значения по именованному PK-constraint target-таблицы."""
-        constraint_columns = self._resolve_pk_columns_from_named_constraint(
+    def _resolve_pk(self, row: Dict[str, Any], target_schema: str, target_table: str) -> Tuple[str, List[str], Dict[str, Any]]:
+        """Находит именованный PK и извлекает PK-значения для текущей строки."""
+        resolved = self._resolve_pk_columns_from_named_constraint(
             target_schema=target_schema,
             target_table=target_table,
         )
-        if not constraint_columns:
+        if not resolved:
             expected_name = self._build_expected_pk_constraint_name(
                 self.pk_constraint_prefix,
                 target_schema,
@@ -187,7 +245,9 @@ class PostgresRealApplier:
                 "real apply cannot resolve PK columns: named primary key constraint not found "
                 f"(expected={expected_name}, table={target_schema}.{target_table})"
             )
-        return self._extract_pk_values_by_columns(row, constraint_columns)
+        constraint_name, constraint_columns = resolved
+        pk_values = self._extract_pk_values_by_columns(row, constraint_columns)
+        return constraint_name, constraint_columns, pk_values
 
     @staticmethod
     def _extract_data_values(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -243,10 +303,14 @@ class PostgresRealApplier:
 
         return target_schema, target_table
 
-    def _upsert(self, row: Dict[str, Any]) -> None:
+    def _upsert(self, row: Dict[str, Any]) -> RealApplyResult:
         """Выполняет INSERT ... ON CONFLICT DO UPDATE для stage-строки."""
         target_schema, target_table = self._resolve_target(row)
-        pk_values = self._extract_pk_values(row, target_schema, target_table)
+        target_pkey_name, target_pkey_columns, pk_values = self._resolve_pk(
+            row,
+            target_schema,
+            target_table,
+        )
         data_values = self._extract_data_values(row)
 
         # На insert всегда включаем PK-поля (если их нет в data, дополняем).
@@ -289,18 +353,35 @@ class PostgresRealApplier:
         )
 
         conn = self._connect()
+        applied_sql_text: Optional[str] = None
         try:
             with conn.cursor() as cur:
+                applied_sql_text = self._render_sql_for_audit(cur, query, values)
                 cur.execute(query, values)
             conn.commit()
-        except Exception:
+            return RealApplyResult(
+                action="upsert",
+                target_pkey_name=target_pkey_name,
+                target_pkey_columns=target_pkey_columns,
+                applied_sql_text=applied_sql_text if self.sql_audit_mode == "full" else None,
+            )
+        except Exception as exc:
             conn.rollback()
-            raise
+            raise RealApplyExecutionError(
+                str(exc),
+                applied_sql_text=applied_sql_text,
+                target_pkey_name=target_pkey_name,
+                target_pkey_columns=target_pkey_columns,
+            ) from exc
 
-    def _hard_delete(self, row: Dict[str, Any]) -> None:
+    def _hard_delete(self, row: Dict[str, Any]) -> RealApplyResult:
         """Выполняет DELETE по извлеченному PK."""
         target_schema, target_table = self._resolve_target(row)
-        pk_values = self._extract_pk_values(row, target_schema, target_table)
+        target_pkey_name, target_pkey_columns, pk_values = self._resolve_pk(
+            row,
+            target_schema,
+            target_table,
+        )
 
         where_sql = sql.SQL(" AND ").join(
             sql.SQL("{} = %s").format(sql.Identifier(col)) for col in pk_values.keys()
@@ -312,28 +393,45 @@ class PostgresRealApplier:
         )
 
         conn = self._connect()
+        sql_params = list(pk_values.values())
+        applied_sql_text: Optional[str] = None
         try:
             with conn.cursor() as cur:
-                cur.execute(query, list(pk_values.values()))
+                applied_sql_text = self._render_sql_for_audit(cur, query, sql_params)
+                cur.execute(query, sql_params)
             conn.commit()
-        except Exception:
+            return RealApplyResult(
+                action="hard_delete",
+                target_pkey_name=target_pkey_name,
+                target_pkey_columns=target_pkey_columns,
+                applied_sql_text=applied_sql_text if self.sql_audit_mode == "full" else None,
+            )
+        except Exception as exc:
             conn.rollback()
-            raise
+            raise RealApplyExecutionError(
+                str(exc),
+                applied_sql_text=applied_sql_text,
+                target_pkey_name=target_pkey_name,
+                target_pkey_columns=target_pkey_columns,
+            ) from exc
 
-    def apply_row(self, row: Dict[str, Any]) -> str:
+    def apply_row(self, row: Dict[str, Any]) -> RealApplyResult:
         """Применяет одну stage-строку в target-таблицу.
 
-        Возвращает строковое действие (`upsert` или `hard_delete`),
-        которое потом фиксируется в stage (`apply_action`).
+        Возвращает действие и метаданные целевого PK
+        для фиксации в stage-таблице.
         """
         op = str(row.get("op") or "").strip().lower()
-        if op == "d":
-            self._hard_delete(row)
-            return "hard_delete"
-        if op in {"c", "u"}:
-            self._upsert(row)
-            return "upsert"
-        raise RuntimeError(f"unsupported op for real apply: {op}")
+        try:
+            if op == "d":
+                return self._hard_delete(row)
+            if op in {"c", "u"}:
+                return self._upsert(row)
+            raise RuntimeError(f"unsupported op for real apply: {op}")
+        except RealApplyExecutionError:
+            raise
+        except Exception as exc:
+            raise RealApplyExecutionError(str(exc)) from exc
 
     def close(self) -> None:
         """Закрывает соединение с Postgres."""

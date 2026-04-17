@@ -23,3 +23,9 @@ Postgres-подкомпонент для двухшагового контура
   `<APPLY_PK_CONSTRAINT_PREFIX><schema>_<table>`.
 - Если PK-constraint с ожидаемым именем не найден, запись помечается как `error`
   с явным текстом причины (fallback отключен).
+- При успешном `applied_real` в stage сохраняются:
+  - `target_pkey_name` — имя найденного PK-constraint;
+  - `target_pkey_columns` — JSON-массив PK-колонок в порядке constraint.
+- SQL-аудит в stage:
+  - `apply_sql_text` сохраняется для `applied_real` только при `APPLY_SQL_AUDIT_MODE=full`;
+  - для `error` SQL сохраняется всегда, если запрос уже был сформирован.

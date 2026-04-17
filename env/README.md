@@ -13,4 +13,7 @@
 - Для apply выбирать режим:
   - `APPLY_MODE=simulate` (без записи в main-таблицы),
   - `APPLY_MODE=real` (реальный upsert/delete в target-таблицы).
+- Для SQL-аудита apply:
+  - `APPLY_SQL_AUDIT_MODE=off` (по умолчанию),
+  - `APPLY_SQL_AUDIT_MODE=full` (сохранять SQL в stage для `applied_real`).
 - Для локальной проверки без БД можно использовать `SINK_TYPE=csv`.
