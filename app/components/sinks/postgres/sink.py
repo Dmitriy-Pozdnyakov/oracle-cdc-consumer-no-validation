@@ -57,6 +57,22 @@ class PostgresSink(Sink):
         """Сериализует dict в JSON-строку для JSONB колонок."""
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
+    @staticmethod
+    def _normalize_text(value: Any) -> Optional[str]:
+        """Приводит произвольное значение к `str` с trim, иначе `None`."""
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @staticmethod
+    def _normalize_identifier(value: Any) -> Optional[str]:
+        """Нормализует идентификатор схемы/таблицы к lower-case."""
+        text = PostgresSink._normalize_text(value)
+        if text is None:
+            return None
+        return text.lower()
+
     def write_processed_message(
         self,
         msg: Message,
@@ -71,6 +87,12 @@ class PostgresSink(Sink):
         """
         conn = self._connect()
         source = value_obj.get("source", {}) if isinstance(value_obj.get("source"), dict) else {}
+        source_schema = self._normalize_text(source.get("schema"))
+        source_table = self._normalize_text(source.get("table"))
+        target_schema = self._normalize_identifier(self.settings.apply_target_schema) or self._normalize_identifier(
+            source_schema
+        )
+        target_table = self._normalize_identifier(source_table)
 
         insert_sql = sql.SQL(
             """
@@ -82,11 +104,13 @@ class PostgresSink(Sink):
                 op,
                 source_schema,
                 source_table,
+                target_schema,
+                target_table,
                 commit_scn,
                 key_json,
                 value_json
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb
             )
             ON CONFLICT (kafka_topic, kafka_partition, kafka_offset) DO NOTHING
             """
@@ -101,8 +125,10 @@ class PostgresSink(Sink):
             msg.offset(),
             datetime.now(timezone.utc),
             value_obj.get("op"),
-            source.get("schema"),
-            source.get("table"),
+            source_schema,
+            source_table,
+            target_schema,
+            target_table,
             source.get("commit_scn"),
             self._json_dump(key_obj),
             self._json_dump(value_obj),

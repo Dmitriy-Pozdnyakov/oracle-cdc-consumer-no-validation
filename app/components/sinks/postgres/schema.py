@@ -30,6 +30,8 @@ class PostgresSchemaManager:
                 op TEXT NOT NULL,
                 source_schema TEXT,
                 source_table TEXT,
+                target_schema TEXT,
+                target_table TEXT,
                 commit_scn BIGINT,
                 key_json JSONB NOT NULL,
                 value_json JSONB NOT NULL,
@@ -46,6 +48,12 @@ class PostgresSchemaManager:
 
         ensure_apply_status_sql = sql.SQL(
             "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS apply_status TEXT NOT NULL DEFAULT 'new'"
+        ).format(schema_ident, table_ident)
+        ensure_target_schema_sql = sql.SQL(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS target_schema TEXT"
+        ).format(schema_ident, table_ident)
+        ensure_target_table_sql = sql.SQL(
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS target_table TEXT"
         ).format(schema_ident, table_ident)
         ensure_apply_action_sql = sql.SQL(
             "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS apply_action TEXT"
@@ -79,6 +87,8 @@ class PostgresSchemaManager:
             cur.execute(create_schema_sql)
             cur.execute(create_table_sql)
             # Миграция для ранее созданных таблиц (до появления apply-* колонок).
+            cur.execute(ensure_target_schema_sql)
+            cur.execute(ensure_target_table_sql)
             cur.execute(ensure_apply_status_sql)
             cur.execute(ensure_apply_action_sql)
             cur.execute(ensure_apply_error_text_sql)

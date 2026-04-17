@@ -24,6 +24,7 @@ class PostgresSinkSettings:
     connect_timeout_sec: int
     application_name: str
     auto_create_table: bool
+    apply_target_schema: str
 
 
 def postgres_settings_from_app_config(cfg: Config) -> PostgresSinkSettings:
@@ -44,6 +45,7 @@ def postgres_settings_from_app_config(cfg: Config) -> PostgresSinkSettings:
         connect_timeout_sec=pg.connect_timeout_sec,
         application_name=pg.application_name,
         auto_create_table=pg.auto_create_table,
+        apply_target_schema=cfg.apply.target_schema,
     )
 
 

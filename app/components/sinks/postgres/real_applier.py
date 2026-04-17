@@ -13,8 +13,10 @@
   - иначе `key_json` как в базовом режиме;
 - данные для `upsert` берутся из `value_json.data`;
 - `delete` строится по извлеченному PK;
-- целевая таблица определяется как `<schema>.<source_table>`,
-  где schema — `APPLY_TARGET_SCHEMA` (если задан), иначе `source_schema`.
+- целевая таблица берется из stage-полей `target_schema/target_table`;
+- fallback для старых stage-строк: `APPLY_TARGET_SCHEMA` (если задан) и
+  `source_schema/source_table`;
+- schema/table идентификаторы приводятся к lower-case.
 """
 
 from __future__ import annotations
@@ -225,18 +227,32 @@ class PostgresRealApplier:
             raise RuntimeError("real apply requires non-empty value_json.data payload")
         return data
 
+    @staticmethod
+    def _normalize_identifier(value: Any) -> str:
+        """Нормализует имя схемы/таблицы к lower-case."""
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        return raw.lower()
+
     def _resolve_target(self, row: Dict[str, Any]) -> Tuple[str, str]:
         """Определяет целевую таблицу по данным stage-строки."""
-        source_schema = str(row.get("source_schema") or "").strip()
-        source_table = str(row.get("source_table") or "").strip()
-        if not source_table:
-            raise RuntimeError("real apply requires non-empty source_table")
+        target_schema = self._normalize_identifier(row.get("target_schema"))
+        target_table = self._normalize_identifier(row.get("target_table"))
 
-        target_schema = self.target_schema_override or source_schema
+        if not target_table:
+            target_table = self._normalize_identifier(row.get("source_table"))
+        if not target_table:
+            raise RuntimeError("real apply requires non-empty target_table/source_table")
+
         if not target_schema:
-            raise RuntimeError("real apply requires source_schema or APPLY_TARGET_SCHEMA")
+            target_schema = self._normalize_identifier(self.target_schema_override)
+        if not target_schema:
+            target_schema = self._normalize_identifier(row.get("source_schema"))
+        if not target_schema:
+            raise RuntimeError("real apply requires target_schema/source_schema/APPLY_TARGET_SCHEMA")
 
-        return target_schema, source_table
+        return target_schema, target_table
 
     def _upsert(self, row: Dict[str, Any]) -> None:
         """Выполняет INSERT ... ON CONFLICT DO UPDATE для stage-строки."""

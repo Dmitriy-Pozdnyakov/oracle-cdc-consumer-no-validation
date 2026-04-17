@@ -80,6 +80,8 @@ class PostgresStageApplyRepository:
                 stage.op,
                 stage.source_schema,
                 stage.source_table,
+                stage.target_schema,
+                stage.target_table,
                 stage.commit_scn,
                 stage.key_json,
                 stage.value_json
