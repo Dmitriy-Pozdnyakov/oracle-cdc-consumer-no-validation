@@ -110,7 +110,7 @@ class PostgresSink(Sink):
                 key_json,
                 value_json
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb
             )
             ON CONFLICT (kafka_topic, kafka_partition, kafka_offset) DO NOTHING
             """
